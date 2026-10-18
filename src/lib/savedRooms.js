@@ -1,21 +1,19 @@
-export const SAVED_ROOMS = [
+export const PURPOSE_SUGGESTIONS = [
+  'birthday party', 'office offsite', 'workshop', 'wedding reception', 'holiday decorating',
+  'club meeting', 'pop-up shop', 'conference', 'hackathon',
+];
+
+export const DEMO_ROOMS = [
   {
-    key: 'founders',
-    name: "Founders' Room",
-    venue_name: 'UCLA James West Alumni Center',
-    room_purpose: 'Hackathon judging expo',
-    width_ft: 40, depth_ft: 30, ceiling_ft: 14, headcount: 120, budget: 5000,
+    name: "Founders' Room, UCLA James West Alumni Center",
+    room_purpose: 'hackathon judging expo',
+    notes: '1,678 sq ft; venue supplies Wi-Fi and a sound system',
+    status: 'draft',
   },
-  {
-    key: 'holiday',
-    name: 'Holiday Living Room',
-    venue_name: 'Home',
-    room_purpose: 'Christmas',
-    width_ft: 18, depth_ft: 15, ceiling_ft: 9, headcount: 12, budget: 800,
-  },
+  { name: 'Holiday Living Room', room_purpose: 'holiday decorating', status: 'draft' },
 ];
 
 export const EMPTY_FACTS = {
-  name: 'New room', venue_name: '', room_purpose: '', width_ft: 20, depth_ft: 16,
-  ceiling_ft: 10, headcount: 10, budget: 1000, deadline: '', photo_url: '',
+  name: 'New room', venue_name: '', room_purpose: '', width_ft: '', depth_ft: '',
+  ceiling_ft: '', headcount: '', budget: '', deadline: '', photo_url: '',
 };

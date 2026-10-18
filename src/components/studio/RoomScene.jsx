@@ -8,7 +8,8 @@ const plane = (args, color, position, rotation) =>
   h('mesh', { position, rotation }, h('planeGeometry', { args }), h('meshStandardMaterial', { color }));
 
 export default function RoomScene({ width, depth, ceiling, onSelect }) {
-  const W = Math.max(Number(width) || 1, 1), D = Math.max(Number(depth) || 1, 1), C = Math.max(Number(ceiling) || 1, 1);
+  // Blank dimensions fall back to a typical room so the view stays usable.
+  const W = Math.max(Number(width) || 20, 1), D = Math.max(Number(depth) || 16, 1), C = Math.max(Number(ceiling) || 10, 1);
   const boxes = [
     { id: 1, label: 'Already here', color: '#9ca3af', pos: [-W * 0.3, -D * 0.25], size: [3, 2.5, 2] },
     { id: 2, label: 'Already here', color: '#9ca3af', pos: [W * 0.25, -D * 0.3], size: [2, 3, 2] },

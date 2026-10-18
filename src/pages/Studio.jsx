@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
-import { SAVED_ROOMS, EMPTY_FACTS } from '@/lib/savedRooms';
+import { EMPTY_FACTS } from '@/lib/savedRooms';
+
+const num = (v) => (v === '' || v == null ? null : Number(v));
 import RoomPhoto from '@/components/studio/RoomPhoto';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
 import RoomScene from '@/components/studio/RoomScene';
@@ -10,23 +12,23 @@ import BoxPanel from '@/components/studio/BoxPanel';
 export default function Studio() {
   const params = new URLSearchParams(window.location.search);
   const [eventId, setEventId] = useState(params.get('event'));
-  const [facts, setFacts] = useState(() => ({ ...EMPTY_FACTS, ...(SAVED_ROOMS.find((r) => r.key === params.get('room')) || {}) }));
+  const [facts, setFacts] = useState(EMPTY_FACTS);
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (!eventId) return;
-    base44.entities.Event.get(eventId).then((e) => setFacts({ ...EMPTY_FACTS, ...e, budget: e.budget_cents != null ? e.budget_cents / 100 : EMPTY_FACTS.budget }));
+    base44.entities.Event.get(eventId).then((e) => setFacts({ ...EMPTY_FACTS, ...e, budget: e.budget_cents != null ? e.budget_cents / 100 : '' }));
   }, []);
 
   const save = async () => {
     setSaving(true);
     const { budget, ...rest } = facts;
     const data = {
-      name: rest.name, room_purpose: rest.room_purpose, venue_name: rest.venue_name, width_ft: rest.width_ft || 0,
-      depth_ft: rest.depth_ft || 0, ceiling_ft: rest.ceiling_ft || 0, headcount: rest.headcount || 0,
-      budget_cents: Math.round((budget || 0) * 100), deadline: rest.deadline || undefined, photo_url: rest.photo_url, status: 'planning',
+      name: rest.name, room_purpose: rest.room_purpose, venue_name: rest.venue_name, width_ft: num(rest.width_ft),
+      depth_ft: num(rest.depth_ft), ceiling_ft: num(rest.ceiling_ft), headcount: num(rest.headcount),
+      budget_cents: budget === '' || budget == null ? null : Math.round(budget * 100), deadline: rest.deadline || undefined, photo_url: rest.photo_url, status: 'planning',
     };
     if (eventId) await base44.entities.Event.update(eventId, data);
     else setEventId((await base44.entities.Event.create(data)).id);

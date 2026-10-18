@@ -11,6 +11,9 @@
     "venue_name": {
       "type": "string"
     },
+    "notes": {
+      "type": "string"
+    },
     "width_ft": {
       "type": "number"
     },
