@@ -40,5 +40,6 @@ export function buildAuraContext({ onStudio, studio, checkout, rooms }) {
     page: !s ? 'home' : s.checkout_open ? 'checkout' : 'studio', step: stepOf(s, checkout || {}), room_name, has_photo, rooms,
     photo_summary, purpose, ceiling_ft, people, budget, needed_by, already_here, theme, items, total, warnings,
     receipt_total: s ? checkout?.receipt_total ?? null : null,
+    trust_check: s ? checkout?.trust || null : null,
   };
 }
