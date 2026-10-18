@@ -19,14 +19,14 @@ const report = (kind, r) => {
 
 export default function TrustCheck({ basket, eventId, capCents }) {
   const [busy, setBusy] = useState('');
-  const [res, setRes] = useState(null);
+  const [res, setRes] = useState({});
 
   const run = async (kind) => {
-    setBusy(kind); setRes(null);
+    setBusy(kind); setRes((p) => ({ ...p, [kind]: null }));
     const payload = { kind, event_id: eventId, visitor_id: getVisitorId() };
     if (kind === 'price') payload.mandate_id = (await createMandate(eventId, basket.items, capCents)).id;
     const r = await call('trustCheck', payload);
-    setRes({ ...r, kind }); report(kind, r); setBusy('');
+    setRes((p) => ({ ...p, [kind]: { ...r, kind } })); report(kind, r); setBusy('');
   };
 
   return (
@@ -39,7 +39,7 @@ export default function TrustCheck({ basket, eventId, capCents }) {
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('price')}>{busy === 'price' && <Loader2 className="w-3 h-3 animate-spin" />}Change a price after signing (+$50)</Button>
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('agent')}>{busy === 'agent' && <Loader2 className="w-3 h-3 animate-spin" />}Tamper with the checkout signature</Button>
       </div>
-      <TrustResult r={res} onRetry={() => run(res.kind)} />
+      {['price', 'agent'].map((k) => <TrustResult key={k} r={res[k]} onRetry={() => run(k)} />)}
     </div>
   );
 }
