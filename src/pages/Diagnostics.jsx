@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import { DEMO_ROOMS } from '@/lib/savedRooms';
+import GeminiResult from '@/components/diagnostics/GeminiResult';
 
 export default function Diagnostics() {
   const [result, setResult] = useState(null);
@@ -27,9 +28,10 @@ export default function Diagnostics() {
     setLoadingDemo(false);
   };
 
-  const test = async () => {
-    setTesting(true);
-    const r = await base44.functions.invoke('testGemini', {}).catch((e) => ({ data: e.response?.data || { error: e.message } }));
+  const test = async (variant) => {
+    setTesting(variant);
+    setResult(null);
+    const r = await base44.functions.invoke('testGemini', { variant }).catch((e) => ({ data: e.response?.data || { error: e.message } }));
     setResult(r.data);
     setTesting(false);
   };
@@ -44,10 +46,11 @@ export default function Diagnostics() {
       </section>
       <section className="rounded-2xl border bg-card p-8 space-y-4">
         <h2 className="text-xl">Gemini</h2>
-        <Button onClick={test} disabled={testing} className="rounded-full">{testing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Test Gemini</Button>
-        {result && (result.error
-          ? <p className="text-destructive text-sm">{result.error}</p>
-          : <p className="text-sm">Reply: <b>{result.text}</b> · {result.ms} ms</p>)}
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => test('default')} disabled={!!testing} className="rounded-full">{testing === 'default' && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Test Gemini</Button>
+          <Button variant="outline" onClick={() => test('flash')} disabled={!!testing} className="rounded-full">{testing === 'flash' && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Test Gemini Flash</Button>
+        </div>
+        <GeminiResult result={result} />
       </section>
       <section className="rounded-2xl border bg-card p-8 space-y-4">
         <div className="flex justify-between items-center">

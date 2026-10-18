@@ -1,28 +1,23 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { secrets } from 'base44:runtime';
+import { generateContent } from '../../shared/gemini.ts';
+
+const MODELS = { default: 'gemini-4-argon', flash: 'gemini-3.5-flash' };
 
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const { variant } = await req.json().catch(() => ({}));
+    const model = MODELS[variant] || MODELS.default;
 
-    const start = Date.now();
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:generateContent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': secrets.get('GEMINI_API_KEY') },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: OK' }] }],
-        generationConfig: { thinkingConfig: { thinkingLevel: 'low' } },
-      }),
-      signal: AbortSignal.timeout(30000),
+    const r = await generateContent(model, {
+      contents: [{ role: 'user', parts: [{ text: 'Reply with exactly: OK' }] }],
+      generationConfig: { thinkingConfig: { thinkingLevel: 'low' } },
     });
-    const ms = Date.now() - start;
-    const data = await res.json();
-    if (!res.ok) return Response.json({ error: data?.error?.message || `HTTP ${res.status}`, ms }, { status: 502 });
-    const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
-    return Response.json({ text, ms });
+    const text = r.ok ? (r.data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim() : null;
+    return Response.json({ model, ok: r.ok, status: r.status, ms: r.ms, text, error: r.errorText || null });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
 }
