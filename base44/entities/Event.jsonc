@@ -1,0 +1,49 @@
+{
+  "name": "Event",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "room_purpose": {
+      "type": "string"
+    },
+    "venue_name": {
+      "type": "string"
+    },
+    "width_ft": {
+      "type": "number"
+    },
+    "depth_ft": {
+      "type": "number"
+    },
+    "ceiling_ft": {
+      "type": "number"
+    },
+    "headcount": {
+      "type": "number"
+    },
+    "budget_cents": {
+      "type": "number"
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date"
+    },
+    "photo_url": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "planning",
+        "ready"
+      ],
+      "default": "draft"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

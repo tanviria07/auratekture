@@ -1,0 +1,19 @@
+{
+  "name": "WebhookLog",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string"
+    },
+    "received_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source"
+  ]
+}
