@@ -180,6 +180,13 @@
     "demo_run": {
       "type": "object",
       "properties": {
+        "kit_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
         "products": {
           "type": "array",
           "items": {
@@ -188,6 +195,21 @@
           }
         },
         "products_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "previews": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "basket": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "saved_at": {
           "type": "string",
           "format": "date-time"
         }

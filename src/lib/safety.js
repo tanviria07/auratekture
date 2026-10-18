@@ -18,8 +18,12 @@ export function safetyChecks(kit, ceilingFt) {
 
   const lights = items.filter((l) => l.category === 'string_lights');
   if (lights.length) {
-    const bad = lights.filter((l) => !/indoor/i.test(l.product.title));
-    out.push({ ok: bad.length ? null : true, label: bad.length ? 'String lights not clearly marked indoor rated' : 'String lights are indoor rated' });
+    const rated = lights.map((l) => l.product.indoor_rated || 'not stated');
+    out.push(rated.includes('no')
+      ? { ok: false, label: 'String lights marked outdoor only' }
+      : rated.includes('not stated')
+        ? { ok: null, label: 'Check the listing: indoor rating not stated' }
+        : { ok: true, label: 'String lights are indoor rated' });
   }
 
   const powered = items.filter((l) => l.category in POWERED);

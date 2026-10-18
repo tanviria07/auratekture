@@ -14,10 +14,13 @@ import PhotoUpload from '@/components/studio/PhotoUpload';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
 import PhotoAnalysis from '@/components/studio/PhotoAnalysis';
 import RoomContents from '@/components/studio/RoomContents';
+import AlreadyProvided from '@/components/studio/AlreadyProvided';
 import DesignPanel from '@/components/studio/DesignPanel';
 import SafetyChecks from '@/components/studio/SafetyChecks';
 import ShoppingList from '@/components/studio/ShoppingList';
 import RoomPreview from '@/components/preview/RoomPreview';
+import DemoRunBar from '@/components/studio/DemoRunBar';
+import { useAuth } from '@/lib/AuthContext';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
 
@@ -33,6 +36,9 @@ export default function Studio() {
   const [updating, setUpdating] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [demoBusy, setDemoBusy] = useState(false);
   const design = useDesignRun();
   const analyzedRef = useRef(false);
   const factsRef = useRef(facts); factsRef.current = facts;
@@ -118,16 +124,54 @@ export default function Studio() {
     setUpdating(false);
   };
 
+  const saveDemoRun = async () => {
+    if (!eventId) return;
+    setDemoBusy(true);
+    try {
+      const { items: [b] } = await base44.entities.Basket.filter({ event_id: eventId }, { sort: '-created_date', limit: 1 });
+      const demo_run = { kit_lines: facts.kit_lines || [], products: facts.products || [], products_at: facts.products_at, previews: facts.previews || [], basket: b || null, saved_at: new Date().toISOString() };
+      await base44.entities.Event.update(eventId, { demo_run });
+      setFacts((f) => ({ ...f, demo_run }));
+      toast({ title: 'Demo run saved' });
+    } catch (e) { toast({ title: 'Could not save', description: e.message, variant: 'destructive' }); }
+    setDemoBusy(false);
+  };
+
+  const loadDemoRun = async () => {
+    const d = facts.demo_run;
+    if (!d) return;
+    setDemoBusy(true);
+    try {
+      const data = { kit_lines: d.kit_lines || [], products: d.products || [], products_at: d.products_at, previews: d.previews || [], products_source: 'demo', product_choices: {} };
+      await base44.entities.Event.update(eventId, data);
+      if (d.basket) {
+        const { items: [b] } = await base44.entities.Basket.filter({ event_id: eventId }, { sort: '-created_date', limit: 1 });
+        const bd = { ...d.basket, event_id: eventId, status: 'open' };
+        if (b) await base44.entities.Basket.update(b.id, bd);
+        else await base44.entities.Basket.create(bd);
+        qc.invalidateQueries({ queryKey: ['basket', eventId] });
+      }
+      setFacts((f) => ({ ...f, ...data }));
+      toast({ title: 'Demo run loaded' });
+    } catch (e) { toast({ title: 'Could not load', description: e.message, variant: 'destructive' }); }
+    setDemoBusy(false);
+  };
+
   const chosen = kit.filter((l) => l.product);
   return (
     <div className="max-w-7xl mx-auto px-gutter pb-16 space-y-10">
       <h1 className="text-3xl">{facts.name}</h1>
+
+      {isAdmin && (
+        <DemoRunBar hasRun={chosen.length > 0} savedAt={facts.demo_run?.saved_at} busy={demoBusy} onSave={saveDemoRun} onLoad={loadDemoRun} />
+      )}
 
       <section className="grid lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-4">
           <RoomPhoto uri={facts.photo_url} />
           <PhotoUpload hasPhoto={!!facts.photo_url} onUploaded={onPhoto} />
           {loaded && facts.photo_url && <RoomContents items={chips} onChange={(items) => patch({ existing_items: items })} />}
+          {loaded && facts.photo_url && <AlreadyProvided value={facts.venue_supplied} onChange={(v) => patch({ venue_supplied: v })} />}
           <PhotoAnalysis analysis={facts.photo_analysis} palette={facts.color_palette} analyzing={analyzing} error={analysisError} onRetry={() => analyze(eventId)} />
         </div>
         <div className="space-y-6">

@@ -14,8 +14,9 @@ const PICK = {
     specs: { type: 'OBJECT', properties: Object.fromEntries(DIMS.map((k) => [k, { type: 'NUMBER', nullable: true }])), required: DIMS },
     confidence: { type: 'OBJECT', properties: Object.fromEntries(DIMS.map((k) => [k, CONF])), required: DIMS },
     raw_spec_quote: { type: 'STRING' },
+    indoor_rated: { type: 'STRING', enum: ['yes', 'no', 'not stated'] },
   },
-  required: ['candidate_index', 'link', 'price', 'specs', 'confidence', 'raw_spec_quote'],
+  required: ['candidate_index', 'link', 'price', 'specs', 'confidence', 'raw_spec_quote', 'indoor_rated'],
 };
 const SCHEMA = { type: 'OBJECT', properties: { lines: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
   line_id: { type: 'STRING' }, status: { type: 'STRING', enum: ['found', 'not_found'] }, reason: { type: 'STRING' },
@@ -26,7 +27,8 @@ const PROMPT = `You are picking real products for an event kit. For each line yo
 For each line pick the best candidate that fits the specs and costs at most max_unit_price_usd, plus up to 2 alternatives.
 You may ONLY choose among the given candidates: copy candidate_index, link and price exactly. Never invent a product, link or price.
 Fill specs (width_in, depth_in, height_in, watts, length_ft) from the listing text. confidence per spec: "quoted" only if the listing text states the value, "estimated" if inferred, "missing" if absent (value null).
-Copy the exact listing text you used into raw_spec_quote. If no candidate fits, set status "not_found" and explain in reason; otherwise give a one-sentence reason.`;
+Copy the exact listing text you used into raw_spec_quote. Set indoor_rated from the listing text: "yes" if it says indoor/interior rated, "no" if it says outdoor only / not for indoor use, "not stated" if it does not say.
+If no candidate fits, set status "not_found" and explain in reason; otherwise give a one-sentence reason.`;
 
 // Validates a Gemini pick against the real candidates; null when it doesn't match exactly.
 function toProduct(pick, cands, qty) {
@@ -47,6 +49,7 @@ function toProduct(pick, cands, qty) {
   return {
     title: c.title, store: c.store, product_url: c.link, via_google: c.via_google, image_url: c.thumbnail,
     unit_price_usd: c.price, qty, delivery: c.delivery, rating: c.rating, reviews: c.reviews,
+    indoor_rated: pick.indoor_rated || 'not stated',
     specs: { ...specs, confidence, raw_spec_quote: quoteOk ? quote : null },
   };
 }
