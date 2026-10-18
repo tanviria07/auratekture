@@ -3,12 +3,12 @@ import { secrets } from 'base44:runtime';
 const DAY_MS = 24 * 3600_000;
 
 // One Google Shopping search; keeps up to 8 priced results with a link.
-export async function searchShopping(q) {
+export async function searchShopping(q, timeoutMs = 15000) {
   const url = new URL('https://serpapi.com/search.json');
   const params = { engine: 'google_shopping', q, gl: 'us', hl: 'en', api_key: secrets.get('SERPAPI_API_KEY') };
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const start = Date.now();
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `SerpApi ${res.status}`);
   const results = (data.shopping_results || [])
@@ -30,11 +30,11 @@ export async function countTodaySearches(db) {
 }
 
 // Same search, cached by query for 24 hours.
-export async function cachedSearch(db, query) {
+export async function cachedSearch(db, query, timeoutMs = 15000) {
   const since = new Date(Date.now() - DAY_MS).toISOString();
   const { items } = await db.entities.SearchCache.filter({ query, fetched_at: { $gte: since } }, { sort: '-fetched_at', limit: 1 });
   if (items[0]) return items[0].results || [];
-  const { results } = await searchShopping(query);
+  const { results } = await searchShopping(query, timeoutMs);
   await db.entities.SearchCache.create({ query, results, fetched_at: new Date().toISOString() });
   return results;
 }

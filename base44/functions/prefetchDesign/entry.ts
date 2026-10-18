@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { getAdmin } from '../../shared/auth.ts';
 
-// Runs plan + product search in the background and stores the result under the facts fingerprint.
+// Runs plan + product search in the background and stores the result under the shopping fingerprint.
 export default async function(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
@@ -35,8 +35,12 @@ export default async function(req: Request) {
       const found = (await base44.functions.invoke('findProducts', { event_id, kit_lines: plan.kit_lines, dry: true })).data;
       if (!(await mine())) return Response.json({ discarded: true });
       await db.entities.Event.update(event_id, { prefetch: {
-        id, fingerprint, status: 'ready', started_at, kit_lines: plan.kit_lines, theme: plan.theme, products: found.products,
-        product_choices: found.product_choices || {}, products_at: found.products_at, timings: { plan_ms, ...(found.timings || {}) },
+        id, fingerprint, status: 'ready', started_at,
+        all_kit_lines: plan.kit_lines, kit_lines: plan.kit_lines,
+        theme: plan.theme,
+        all_products: found.all_products, products: found.products,
+        product_choices: found.product_choices || {}, products_at: found.products_at,
+        timings: { plan_ms, ...(found.timings || {}) },
       } });
       await db.entities.CreaoRun.update(run.id, { status: 'completed', completed_at: new Date().toISOString() });
       return Response.json({ ready: true });

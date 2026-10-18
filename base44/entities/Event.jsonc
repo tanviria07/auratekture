@@ -236,6 +236,13 @@
           "type": "string",
           "format": "date-time"
         },
+        "all_kit_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
         "kit_lines": {
           "type": "array",
           "items": {
@@ -245,6 +252,13 @@
         },
         "theme": {
           "type": "string"
+        },
+        "all_products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
         },
         "products": {
           "type": "array",

@@ -5,6 +5,7 @@ import { loadKitLines } from '../../shared/kit.ts';
 import { cachedSearch } from '../../shared/serpapi.ts';
 import { QUERY } from '../../shared/needRules.ts';
 import { prepareRef } from '../../shared/image.ts';
+import { fitBudget } from '../../shared/budget.ts';
 
 const MATCH_MODEL = 'gemini-3.5-flash';
 const DIMS = ['width_in', 'depth_in', 'height_in', 'watts', 'length_ft'];
@@ -157,63 +158,15 @@ function buildProduct(line: any, cands: any[], ans: any, error: string | null) {
   return { line_id: line.line_id, status: 'found', reason: ans.reason, ...main, alternatives };
 }
 
-// Simpler query for retry round 2: category default + key spec.
-function retryQuery(line: any, round: number) {
-  const cat = line.category.replace(/_/g, ' ');
-  if (round === 2) {
-    const q = QUERY[line.category] || cat;
-    const specs = line.specs || {};
-    if (specs.height_in_max) {
-      const ft = Math.round((specs.height_in_max / 12) * 10) / 10;
-      return `${ft} ft ${q}`;
-    }
-    return q;
+// Simpler query for the single retry round: category default + key spec.
+function retryQuery(line: any) {
+  const q = QUERY[line.category] || line.category.replace(/_/g, ' ');
+  const specs = line.specs || {};
+  if (specs.height_in_max) {
+    const ft = Math.round((specs.height_in_max / 12) * 10) / 10;
+    return `${ft} ft ${q}`;
   }
-  return cat; // Round 3: just the item name
-}
-
-// Fit the basket to budget: switch expensive items to cheaper alternatives, then drop low-impact optional items.
-function fitBudget(products: any[], lines: any[], budgetCents: number) {
-  if (!budgetCents) return { products, choices: {} };
-  const budget = budgetCents / 100;
-  const requiredCats = new Set(['christmas_tree', 'string_lights']);
-  const lineMap = new Map(lines.map((l) => [l.line_id, l]));
-  const choices: Record<string, number> = {};
-
-  const selected = (p: any) => {
-    const idx = choices[p.line_id] || 0;
-    return idx === 0 ? p : (p.alternatives || [])[idx - 1] || p;
-  };
-  const total = () => products.filter((p) => p.status === 'found')
-    .reduce((s, p) => s + selected(p).unit_price_usd * (p.qty || 1), 0);
-
-  // Step 1: Switch expensive items to cheaper alternatives
-  if (total() > budget) {
-    const found = products.filter((p) => p.status === 'found')
-      .sort((a, b) => selected(b).unit_price_usd - selected(a).unit_price_usd);
-    for (const p of found) {
-      if (total() <= budget) break;
-      const alts = (p.alternatives || [])
-        .map((a, i) => ({ a, i: i + 1 }))
-        .filter(({ a }) => a.unit_price_usd < selected(p).unit_price_usd)
-        .sort((x, y) => x.a.unit_price_usd - y.a.unit_price_usd);
-      if (alts.length) choices[p.line_id] = alts[0].i;
-    }
-  }
-
-  // Step 2: Drop lowest-impact optional items (never tree or lights)
-  if (total() > budget) {
-    const droppable = products.filter((p) => p.status === 'found')
-      .filter((p) => !requiredCats.has(lineMap.get(p.line_id)?.category || ''))
-      .sort((a, b) => (lineMap.get(a.line_id)?.weight || 1) - (lineMap.get(b.line_id)?.weight || 1));
-    for (const p of droppable) {
-      if (total() <= budget) break;
-      const idx = products.findIndex((pr) => pr.line_id === p.line_id);
-      products[idx] = { line_id: p.line_id, status: 'dropped', reason: 'Dropped to fit budget', qty: p.qty };
-    }
-  }
-
-  return { products, choices };
+  return q;
 }
 
 export default async function(req: Request) {
@@ -246,41 +199,42 @@ export default async function(req: Request) {
         return { ...p, ref_url: file_url };
       } catch { return p; }
     };
-    let t = Date.now(), search_ms = 0, match_ms = 0;
     if (!lines.length) return Response.json({ error: 'Add a kit first' }, { status: 400 });
 
     const total = lines.length;
     const run = await db.entities.CreaoRun.create({ event_id, role: 'find_products', by_admin, status: 'running', job_group: progress_id || null, result_text: `0 of ${total} found`, started_at: new Date().toISOString() });
     const setProgress = (txt: string) => { run.result_text = txt; return db.entities.CreaoRun.update(run.id, { result_text: txt }).catch(() => {}); };
 
-    // Round 1: search all lines with their stylist query, match all in parallel
+    // Round 1: search all lines in parallel (8s timeout each), then match all in parallel.
+    let t = Date.now();
     const round1 = await Promise.all(lines.map(async (line) => {
       const q = line.search_query || (line.category || '').replace(/_/g, ' ');
       let cands: any[] = [], error: string | null = null;
-      try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
+      try { cands = await cachedSearch(db, q, 8000); } catch (e: any) { error = e.message; }
       return { line, q, cands, error };
     }));
-    search_ms += Date.now() - t; t = Date.now();
+    const search_ms = Date.now() - t;
+    t = Date.now();
     let products = await Promise.all(round1.map(({ line, cands, error }) => matchAndBuild(line, cands, error).then(withRef)));
-    match_ms += Date.now() - t;
+    const match_ms = Date.now() - t;
 
     let foundCount = products.filter((p) => p.status === 'found').length;
     await setProgress(`${foundCount} of ${total} found`);
 
-    // Round 2: retry not-found lines with a simpler query
-    let notFound = products.filter((p) => p.status === 'not_found').map((p) => p.line_id);
+    // Round 2 (single retry): re-search only still-missing items with a simpler query.
+    let retry_ms = 0;
+    const notFound = products.filter((p) => p.status === 'not_found').map((p) => p.line_id);
     if (notFound.length) {
       const retryLines = lines.filter((l) => notFound.includes(l.line_id));
       t = Date.now();
       const round2 = await Promise.all(retryLines.map(async (line) => {
-        const q = retryQuery(line, 2);
+        const q = retryQuery(line);
         let cands: any[] = [], error: string | null = null;
-        try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
+        try { cands = await cachedSearch(db, q, 8000); } catch (e: any) { error = e.message; }
         return { line, q, cands, error };
       }));
-      search_ms += Date.now() - t; t = Date.now();
       const r2products = await Promise.all(round2.map(({ line, cands, error }) => matchAndBuild(line, cands, error).then(withRef)));
-      match_ms += Date.now() - t;
+      retry_ms = Date.now() - t;
       for (const np of r2products) {
         if (np.status === 'found') {
           const idx = products.findIndex((p) => p.line_id === np.line_id);
@@ -291,31 +245,9 @@ export default async function(req: Request) {
       await setProgress(`${foundCount} of ${total} found`);
     }
 
-    // Round 3: retry still-not-found lines with just the item name
-    notFound = products.filter((p) => p.status === 'not_found').map((p) => p.line_id);
-    if (notFound.length) {
-      const retryLines = lines.filter((l) => notFound.includes(l.line_id));
-      t = Date.now();
-      const round3 = await Promise.all(retryLines.map(async (line) => {
-        const q = retryQuery(line, 3);
-        let cands: any[] = [], error: string | null = null;
-        try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
-        return { line, q, cands, error };
-      }));
-      search_ms += Date.now() - t; t = Date.now();
-      const r3products = await Promise.all(round3.map(({ line, cands, error }) => matchAndBuild(line, cands, error).then(withRef)));
-      match_ms += Date.now() - t;
-      for (const np of r3products) {
-        if (np.status === 'found') {
-          const idx = products.findIndex((p) => p.line_id === np.line_id);
-          products[idx] = np;
-        }
-      }
-      foundCount = products.filter((p) => p.status === 'found').length;
-      await setProgress(`${foundCount} of ${total} found`);
-    }
-
-    // Budget fitting: switch to alternatives, then drop optional items
+    // Budget fitting: switch to alternatives, then drop optional items (plain code, no AI call).
+    // Keep a pre-fit copy so background updates can re-fit without losing dropped items.
+    const all_products = products.map((p) => ({ ...p }));
     const { choices } = fitBudget(products, lines, ev.budget_cents);
     foundCount = products.filter((p) => p.status === 'found').length;
     const totalCost = products.filter((p) => p.status === 'found')
@@ -329,7 +261,7 @@ export default async function(req: Request) {
     const products_at = new Date().toISOString();
     if (!dry) await db.entities.Event.update(event_id, { products, products_at, products_source: 'live', product_choices: choices });
     await db.entities.CreaoRun.update(run.id, { status: 'completed', completed_at: products_at });
-    return Response.json({ products, products_at, product_choices: choices, timings: { search_ms, match_ms } });
+    return Response.json({ products, all_products, products_at, product_choices: choices, timings: { search_ms, match_ms, retry_ms } });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

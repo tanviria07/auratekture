@@ -21,6 +21,9 @@
     "match_ms": {
       "type": "number"
     },
+    "retry_ms": {
+      "type": "number"
+    },
     "image_ms": {
       "type": "number"
     },

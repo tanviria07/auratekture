@@ -220,7 +220,7 @@ export default function Studio() {
     setDemoBusy(false);
   };
 
-  const prefetch = usePrefetch({ facts, loaded, busy: design.busy, save });
+  const prefetch = usePrefetch({ facts, loaded, busy: design.busy, save, eventId });
   const chosen = kit.filter((l) => l.product);
   const numbered = numberKit(chosen, facts.previews?.[0]);
   const [focus, setFocus] = useState(null);
