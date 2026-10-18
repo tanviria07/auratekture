@@ -1,0 +1,50 @@
+{
+  "name": "Basket",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "line_id": {
+            "type": "string"
+          },
+          "store": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "product_url": {
+            "type": "string"
+          },
+          "unit_price_cents": {
+            "type": "number"
+          },
+          "qty": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "total_cents": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "authorized",
+        "failed"
+      ],
+      "default": "open"
+    }
+  },
+  "required": [
+    "event_id"
+  ]
+}

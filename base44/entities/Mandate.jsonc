@@ -1,0 +1,41 @@
+{
+  "name": "Mandate",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "cap_cents": {
+      "type": "number"
+    },
+    "basket_sha256": {
+      "type": "string"
+    },
+    "nonce": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "user_public_key": {
+      "type": "string"
+    },
+    "signature": {
+      "type": "string"
+    },
+    "used": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "event_id",
+    "cap_cents",
+    "basket_sha256",
+    "nonce",
+    "expires_at",
+    "user_public_key",
+    "signature"
+  ]
+}

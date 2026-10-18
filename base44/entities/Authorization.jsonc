@@ -1,0 +1,37 @@
+{
+  "name": "Authorization",
+  "type": "object",
+  "properties": {
+    "mandate_id": {
+      "type": "string"
+    },
+    "store": {
+      "type": "string"
+    },
+    "amount_cents": {
+      "type": "number"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "sandbox",
+        "simulated"
+      ]
+    },
+    "status": {
+      "type": "string"
+    },
+    "transaction_id": {
+      "type": "string"
+    },
+    "response_summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "mandate_id",
+    "store",
+    "amount_cents",
+    "mode"
+  ]
+}
