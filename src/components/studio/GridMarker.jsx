@@ -4,7 +4,7 @@ export const CIRCUIT_COLORS = { 1: '#2563eb', 2: '#7c3aed', 3: '#0891b2' };
 
 // One placed thing on the floor grid, drawn in feet units.
 export default function GridMarker({ kind, m, W, onDown }) {
-  const p = { onPointerDown: onDown, style: { cursor: 'grab' } };
+  const p = { onPointerDown: onDown, style: { cursor: 'grab' }, ...(m.suggested && { fillOpacity: 0.35, stroke: '#57534e', strokeWidth: 0.08, strokeDasharray: '0.25 0.15' }) };
   if (kind === 'outlets') return h('g', p,
     h('circle', { cx: m.x_ft, cy: m.z_ft, r: 0.45, fill: CIRCUIT_COLORS[m.circuit_id] || '#2563eb' }),
     h('text', { x: m.x_ft, y: m.z_ft + 0.2, fontSize: 0.55, textAnchor: 'middle', fill: '#fff' }, m.circuit_id));

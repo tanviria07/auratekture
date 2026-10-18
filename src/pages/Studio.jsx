@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { EMPTY_FACTS } from '@/lib/savedRooms';
 import { getVisitorId } from '@/lib/visitor';
+import { mergeDetectedItems, confirmedOnly } from '@/lib/photoSuggestions';
 import RoomPhoto from '@/components/studio/RoomPhoto';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
 import RoomScene from '@/components/studio/RoomScene';
@@ -59,7 +60,7 @@ export default function Studio() {
     const data = {
       name: rest.name, room_purpose: rest.room_purpose, venue_name: rest.venue_name, width_ft: num(rest.width_ft),
       depth_ft: num(rest.depth_ft), ceiling_ft: num(rest.ceiling_ft), headcount: num(rest.headcount),
-      budget_cents: budget === '' || budget == null ? null : Math.round(budget * 100), deadline: rest.deadline || undefined, photo_url: rest.photo_url, status: 'planning',
+      budget_cents: budget === '' || budget == null ? null : Math.round(budget * 100), deadline: rest.deadline || undefined, photo_url: rest.photo_url, venue_supplied: rest.venue_supplied, status: 'planning',
     };
     if (eventId) await base44.entities.Event.update(eventId, data);
     else setEventId((await base44.entities.Event.create({ ...data, visitor_id: getVisitorId() })).id);
@@ -80,23 +81,7 @@ export default function Studio() {
           <RoomPhoto uri={facts.photo_url} />
           <PhotoAnalysis analysis={facts.photo_analysis} palette={facts.color_palette} analyzing={analyzing} error={analysisError} onRetry={() => analyze(eventId)} />
         </div>
-        {loaded && (
-          <FloorGrid key={`${facts.width_ft}x${facts.depth_ft}`} width={facts.width_ft} depth={facts.depth_ft} headcount={facts.headcount}
-            initial={facts} onSave={(layout) => patch(layout)} />
-        )}
-      </div>
-
-      {loaded && (
-        <div className="grid lg:grid-cols-2 gap-8">
-          <RoomContents key={facts.existing_items ? 'saved' : facts.photo_analysis ? 'detected' : 'none'}
-            initial={facts.existing_items || facts.photo_analysis?.existing_items} confirmed={!!facts.existing_items}
-            onConfirm={async (items) => { await patch({ existing_items: items }); toast({ title: 'Room contents confirmed' }); }} />
-          <VenueSupplied initial={facts.venue_supplied} onSave={async (v) => { await patch({ venue_supplied: v }); toast({ title: 'Saved' }); }} />
-        </div>
-      )}
-
-      <div className="grid lg:grid-cols-[380px_1fr] gap-8">
-        <div className="space-y-8">
+        <div className="space-y-6">
           <RoomFactsForm facts={facts} onChange={(k, v) => setFacts((f) => ({ ...f, [k]: v }))} onSave={save} saving={saving} saved={!!eventId} />
           <Sheet>
             <SheetTrigger asChild><Button variant="outline" className="w-full rounded-full"><ShoppingBag className="w-4 h-4" />Checkout</Button></SheetTrigger>
@@ -106,11 +91,26 @@ export default function Studio() {
             </SheetContent>
           </Sheet>
         </div>
-        <div className="relative h-[520px] lg:h-[calc(100vh-10rem)] rounded-2xl overflow-hidden border bg-card">
-          <RoomScene width={facts.width_ft} depth={facts.depth_ft} ceiling={facts.ceiling_ft} items={facts.existing_items}
-            outlets={facts.outlets} exits={facts.exits} fixtures={facts.fixtures} onSelect={setSelected} />
-          <BoxPanel box={selected} onClose={() => setSelected(null)} />
+      </div>
+
+      {loaded && (
+        <div className="grid lg:grid-cols-2 gap-8">
+          <RoomContents key={facts.photo_analysis ? 'detected' : 'none'}
+            initial={facts.existing_items?.length ? facts.existing_items : mergeDetectedItems(facts.photo_analysis)}
+            onConfirm={async (items) => { await patch({ existing_items: items }); toast({ title: 'Room contents confirmed' }); }} />
+          <VenueSupplied value={facts.venue_supplied} onChange={(v) => setFacts((f) => ({ ...f, venue_supplied: v }))} />
         </div>
+      )}
+
+      {loaded && (
+        <FloorGrid key={`${facts.width_ft}x${facts.depth_ft}-${!!facts.photo_analysis}`} width={facts.width_ft} depth={facts.depth_ft} headcount={facts.headcount}
+          initial={facts} analysis={facts.photo_analysis} onSave={(layout) => patch(layout)} />
+      )}
+
+      <div className="relative h-[520px] lg:h-[70vh] rounded-2xl overflow-hidden border bg-card">
+        <RoomScene width={facts.width_ft} depth={facts.depth_ft} ceiling={facts.ceiling_ft} items={facts.existing_items}
+          outlets={facts.outlets} exits={confirmedOnly(facts.exits)} fixtures={confirmedOnly(facts.fixtures)} onSelect={setSelected} />
+        <BoxPanel box={selected} onClose={() => setSelected(null)} />
       </div>
     </div>
   );

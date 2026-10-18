@@ -2,12 +2,19 @@ import { createElement as h, useRef, useState } from 'react';
 import GridToolbar from './GridToolbar';
 import GridMarker from './GridMarker';
 import DensityNote from './DensityNote';
+import SuggestedList from './SuggestedList';
+import { suggestedLayout } from '@/lib/photoSuggestions';
 
 const KIND = { outlet: 'outlets', exit: 'exits', heat: 'fixtures', window: 'fixtures' };
 
-export default function FloorGrid({ width, depth, headcount, initial, onSave }) {
+export default function FloorGrid({ width, depth, headcount, initial, analysis, onSave }) {
   const W = Math.max(Number(width) || 20, 1), D = Math.max(Number(depth) || 16, 1);
-  const [layout, setLayout] = useState({ outlets: initial.outlets || [], exits: initial.exits || [], fixtures: initial.fixtures || [] });
+  const [layout, setLayout] = useState(() => {
+    const fresh = !initial.exits?.length && !initial.fixtures?.length;
+    const sug = fresh ? suggestedLayout(analysis, W, D) : { exits: [], fixtures: [] };
+    return { outlets: initial.outlets || [], exits: fresh ? sug.exits : initial.exits, fixtures: fresh ? sug.fixtures : initial.fixtures };
+  });
+  const setMark = (kind, id, fn) => commit({ ...layout, [kind]: layout[kind].flatMap((m) => (m.id === id ? fn(m) : [m])) });
   const [tool, setTool] = useState('outlet');
   const [circuit, setCircuit] = useState('1');
   const [exitWidth, setExitWidth] = useState(3);
@@ -32,12 +39,13 @@ export default function FloorGrid({ width, depth, headcount, initial, onSave }) 
   const move = (e) => {
     const d = drag.current; if (!d) return;
     const pos = toFt(e); d.moved = true;
-    setLayout((l) => ({ ...l, [d.kind]: l[d.kind].map((m) => (m.id === d.id ? { ...m, ...pos } : m)) }));
+    setLayout((l) => ({ ...l, [d.kind]: l[d.kind].map((m) => (m.id === d.id ? { ...m, ...pos, suggested: false } : m)) }));
   };
   const up = () => {
     const d = drag.current; if (!d) return; drag.current = null;
     setLayout((l) => {
-      const next = d.moved ? l : { ...l, [d.kind]: l[d.kind].filter((m) => m.id !== d.id) };
+      const tapped = l[d.kind].find((m) => m.id === d.id);
+      const next = d.moved || tapped?.suggested ? l : { ...l, [d.kind]: l[d.kind].filter((m) => m.id !== d.id) };
       onSave(next); return next;
     });
   };
@@ -54,6 +62,7 @@ export default function FloorGrid({ width, depth, headcount, initial, onSave }) 
         h('g', { pointerEvents: 'none' }, ...lines),
         h('text', { x: W / 2, y: -0.15, fontSize: 0.45, textAnchor: 'middle', fill: '#a8a29e' }, `Back wall · ${W} × ${D} ft`),
         ...['outlets', 'exits', 'fixtures'].flatMap((k) => layout[k].map((m) => h(GridMarker, { key: m.id, kind: k, m, W, onDown: down(k, m.id) }))))}
+      <SuggestedList layout={layout} onConfirm={(k, id) => setMark(k, id, (m) => [{ ...m, suggested: false }])} onDismiss={(k, id) => setMark(k, id, () => [])} />
       <DensityNote W={W} D={D} headcount={Number(headcount)} hasOutlets={layout.outlets.length > 0} />
     </div>
   );

@@ -5,9 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CATEGORIES, ROOM_KEYS } from '@/lib/categories';
 import ItemChip from './ItemChip';
 
-export default function RoomContents({ initial, confirmed, onConfirm }) {
-  const [items, setItems] = useState(initial || []);
+export default function RoomContents({ initial, onConfirm }) {
+  const [items, setItemsRaw] = useState(initial || []);
   const [saving, setSaving] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const setItems = (fn) => { setConfirmed(false); setItemsRaw(fn); };
 
   const setCount = (i, d) => setItems((list) => list.map((it, j) => (j === i ? { ...it, count: Math.max(1, it.count + d), confidence: 1 } : it)));
   const add = (category) => setItems((list) => {
@@ -15,7 +17,7 @@ export default function RoomContents({ initial, confirmed, onConfirm }) {
     if (i >= 0) return list.map((it, j) => (j === i ? { ...it, count: it.count + 1 } : it));
     return [...list, { category, label: CATEGORIES[category].label, count: 1, confidence: 1 }];
   });
-  const confirm = async () => { setSaving(true); await onConfirm(items); setSaving(false); };
+  const confirm = async () => { setSaving(true); await onConfirm(items); setSaving(false); setConfirmed(true); };
 
   return (
     <section className="space-y-4">
