@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { EMPTY_FACTS } from '@/lib/savedRooms';
+import { getVisitorId } from '@/lib/visitor';
 import RoomPhoto from '@/components/studio/RoomPhoto';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
 import RoomScene from '@/components/studio/RoomScene';
@@ -61,7 +62,7 @@ export default function Studio() {
       budget_cents: budget === '' || budget == null ? null : Math.round(budget * 100), deadline: rest.deadline || undefined, photo_url: rest.photo_url, status: 'planning',
     };
     if (eventId) await base44.entities.Event.update(eventId, data);
-    else setEventId((await base44.entities.Event.create(data)).id);
+    else setEventId((await base44.entities.Event.create({ ...data, visitor_id: getVisitorId() })).id);
     setSaving(false);
     toast({ title: 'Event saved' });
   };

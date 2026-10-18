@@ -5,6 +5,9 @@
     "name": {
       "type": "string"
     },
+    "visitor_id": {
+      "type": "string"
+    },
     "room_purpose": {
       "type": "string"
     },

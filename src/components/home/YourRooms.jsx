@@ -3,12 +3,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Trash2, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { useAuth } from '@/lib/AuthContext';
+import { getVisitorId } from '@/lib/visitor';
 
 export default function YourRooms() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { data: rooms, isLoading } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => base44.entities.Event.filter({}, { sort: '-updated_date', limit: 50 }).then((p) => p.items),
+    queryKey: ['events', isAdmin],
+    queryFn: () => base44.entities.Event.filter(isAdmin ? {} : { visitor_id: getVisitorId() }, { sort: '-updated_date', limit: 50 }).then((p) => p.items),
   });
 
   const remove = async (e, id) => {

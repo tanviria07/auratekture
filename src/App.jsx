@@ -11,6 +11,11 @@ import SiteLayout from '@/components/SiteLayout';
 import Home from '@/pages/Home';
 import Studio from '@/pages/Studio';
 import Diagnostics from '@/pages/Diagnostics';
+import Login from '@/pages/Login';
+import AdminGate from '@/components/diagnostics/AdminGate';
+import Register from '@/pages/Register';
+import ForgotPassword from '@/pages/ForgotPassword';
+import ResetPassword from '@/pages/ResetPassword';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -28,11 +33,8 @@ const AuthenticatedApp = () => {
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
     }
+    // Logged-out visitors can use the app; only Diagnostics asks for login.
   }
 
   // Render the main app
@@ -41,8 +43,12 @@ const AuthenticatedApp = () => {
       <Route element={<SiteLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/studio" element={<Studio />} />
-        <Route path="/diagnostics" element={<Diagnostics />} />
+        <Route path="/diagnostics" element={<AdminGate><Diagnostics /></AdminGate>} />
       </Route>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

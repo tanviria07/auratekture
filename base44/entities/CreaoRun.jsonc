@@ -11,6 +11,10 @@
     "job_group": {
       "type": "string"
     },
+    "by_admin": {
+      "type": "boolean",
+      "default": false
+    },
     "creao_run_id": {
       "type": "string"
     },

@@ -30,11 +30,9 @@ Never guess the room's purpose or what event it is for. Never invent items that 
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const { event_id } = await req.json();
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
-    const ev = await base44.entities.Event.get(event_id);
+    const ev = await base44.asServiceRole.entities.Event.get(event_id);
     if (!ev.photo_url) return Response.json({ error: 'This room has no photo' }, { status: 400 });
 
     const url = ev.photo_url.startsWith('http') ? ev.photo_url
@@ -57,7 +55,7 @@ export default async function(req) {
     const analysis = JSON.parse(text);
     analysis.existing_items = (analysis.existing_items || []).filter((i) => ROOM_KEYS.includes(i.category));
     const color_palette = (analysis.color_palette_hex || []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 5);
-    await base44.entities.Event.update(event_id, { photo_analysis: analysis, color_palette });
+    await base44.asServiceRole.entities.Event.update(event_id, { photo_analysis: analysis, color_palette });
     return Response.json({ photo_analysis: analysis, color_palette, ms: r.ms });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

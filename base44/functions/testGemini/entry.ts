@@ -1,13 +1,13 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { generateContent } from '../../shared/gemini.ts';
+import { getAdmin, adminOnly } from '../../shared/auth.ts';
 
 const MODELS = { default: 'gemini-4-argon', flash: 'gemini-3.5-flash' };
 
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!(await getAdmin(base44))) return adminOnly();
     const { variant } = await req.json().catch(() => ({}));
     const model = MODELS[variant] || MODELS.default;
 

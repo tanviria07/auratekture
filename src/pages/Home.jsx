@@ -5,6 +5,7 @@ import { Upload, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import YourRooms from '@/components/home/YourRooms';
+import { getVisitorId } from '@/lib/visitor';
 
 export default function Home() {
   const fileRef = useRef(null);
@@ -16,7 +17,7 @@ export default function Home() {
     if (!file) return;
     setUploading(true);
     const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
-    const ev = await base44.entities.Event.create({ name: 'New room', photo_url: file_uri, status: 'draft', width_ft: 20, depth_ft: 16, ceiling_ft: 10 });
+    const ev = await base44.entities.Event.create({ name: 'New room', visitor_id: getVisitorId(), photo_url: file_uri, status: 'draft', width_ft: 20, depth_ft: 16, ceiling_ft: 10 });
     navigate(`/studio?event=${ev.id}`);
   };
 
