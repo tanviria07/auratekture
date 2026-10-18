@@ -13,9 +13,9 @@ export async function searchShopping(q) {
   if (!res.ok || data.error) throw new Error(data.error || `SerpApi ${res.status}`);
   const results = (data.shopping_results || [])
     .filter((r) => r.extracted_price != null && (r.link || r.product_link))
-    .slice(0, 8)
+    .slice(0, 5)
     .map((r) => ({
-      title: r.title, store: r.source, price: r.extracted_price,
+      title: r.title,       store: /^(ebay|etsy)/i.test(r.source || '') ? 'Marketplace seller' : r.source, price: r.extracted_price,
       link: r.link || r.product_link, via_google: !r.link, thumbnail: r.thumbnail || null,
       delivery: r.delivery || null, rating: r.rating ?? null, reviews: r.reviews ?? null,
     }));

@@ -103,7 +103,7 @@ export default function Studio() {
     const id = await save();
     let lines = [];
     await design.run({
-      kit: async () => { const r = await invoke('proposeKit', { event_id: id }); if (!r.error) { lines = r.kit_lines; setFacts((f) => ({ ...f, kit_lines: lines, products: [], product_choices: {} })); } return r; },
+      kit: async () => { const r = await invoke('proposeKit', { event_id: id }); if (!r.error) { lines = r.kit_lines; setFacts((f) => ({ ...f, kit_lines: lines, products: [], product_choices: {}, theme: r.theme })); } return r; },
       find: async () => {
         setProgress('');
         const r = await findProducts(id, setProgress);
@@ -183,7 +183,7 @@ export default function Studio() {
 
       {loaded && (
         <RoomPreview photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices} kit={chosen}
-          onSwap={swap} onUpdate={updateImage} updating={updating} />
+          onSwap={swap} onUpdate={updateImage} updating={updating} theme={facts.theme} />
       )}
 
       {chosen.length > 0 && (

@@ -35,6 +35,11 @@ export function safetyChecks(kit, ceilingFt) {
 
   const flames = items.filter((l) => FLAME.test(l.product.title) && !SAFE_FLAME.test(l.product.title));
   out.push({ ok: !flames.length, label: flames.length ? `Open flame: ${flames.map((l) => l.product.title).join(', ')}` : 'No open flames or candles' });
+  const mantelDecor = items.filter((l) => {
+    const z = (l.zone || '').toLowerCase(), p = (l.placement || '').toLowerCase();
+    return z.includes('mantel') || p.includes('mantel') || (['garland', 'stockings'].includes(l.category) && (z.includes('fireplace') || p.includes('fireplace')));
+  });
+  if (mantelDecor.length) out.push({ ok: null, label: "Don't use the fireplace while mantel decor is up.", note: 'Fire hazard' });
   out.push({ ok: true, label: 'Decor 3 ft from heat sources, doors kept clear', note: 'Placement shown is a suggestion' });
   return out;
 }

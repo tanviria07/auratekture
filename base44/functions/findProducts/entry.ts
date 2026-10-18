@@ -4,7 +4,7 @@ import { getAdmin } from '../../shared/auth.ts';
 import { loadKitLines } from '../../shared/kit.ts';
 import { cachedSearch } from '../../shared/serpapi.ts';
 
-const MODELS = ['gemini-4-argon', 'gemini-3.5-flash'];
+const MATCH_MODEL = 'gemini-3.5-flash';
 const DIMS = ['width_in', 'depth_in', 'height_in', 'watts', 'length_ft'];
 const CONF = { type: 'STRING', enum: ['quoted', 'estimated', 'missing'] };
 const PICK = {
@@ -18,26 +18,33 @@ const PICK = {
   },
   required: ['candidate_index', 'link', 'price', 'specs', 'confidence', 'raw_spec_quote', 'indoor_rated'],
 };
-const SCHEMA = { type: 'OBJECT', properties: { lines: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
-  line_id: { type: 'STRING' }, status: { type: 'STRING', enum: ['found', 'not_found'] }, reason: { type: 'STRING' },
-  pick: PICK, alternatives: { type: 'ARRAY', items: PICK },
-}, required: ['line_id', 'status', 'reason', 'alternatives'] } } }, required: ['lines'] };
+const LINE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    status: { type: 'STRING', enum: ['found', 'not_found'] },
+    reason: { type: 'STRING' },
+    pick: PICK,
+    alternatives: { type: 'ARRAY', items: PICK },
+  },
+  required: ['status', 'reason', 'alternatives'],
+};
 
-const PROMPT = `You are picking real products for an event kit. For each line you get shopping candidates from Google Shopping.
-For each line pick the best candidate that fits the specs and costs at most max_unit_price_usd, plus up to 2 alternatives.
+const PROMPT = `You are picking a real product for one kit line from Google Shopping candidates.
+Pick the best candidate that fits the specs and costs at most max_unit_price_usd, plus up to 2 alternatives.
 You may ONLY choose among the given candidates: copy candidate_index, link and price exactly. Never invent a product, link or price.
-Fill specs (width_in, depth_in, height_in, watts, length_ft) from the listing text. confidence per spec: "quoted" only if the listing text states the value, "estimated" if inferred, "missing" if absent (value null).
-Copy the exact listing text you used into raw_spec_quote. Set indoor_rated from the listing text: "yes" if it says indoor/interior rated, "no" if it says outdoor only / not for indoor use, "not stated" if it does not say.
+Prefer major retailers (Amazon, Walmart, Target, Home Depot, Lowe's, Wayfair, Michaels, Kohl's, Macy's, Best Buy). Use eBay or Etsy only if nothing else fits.
+For trees, prefer listings that state the height in the title, and match the height from the specs (height_in_max).
+Fill specs (width_in, depth_in, height_in, watts, length_ft) from the listing text. confidence per spec: "quoted" if the listing states the value, "estimated" if inferred, "missing" if absent (value null).
+Copy the exact listing text you used into raw_spec_quote. Set indoor_rated from the listing text: "yes" if indoor/interior rated, "no" if outdoor only, "not stated" if it does not say.
 If no candidate fits, set status "not_found" and explain in reason; otherwise give a one-sentence reason.`;
 
-// Validates a Gemini pick against the real candidates; null when it doesn't match exactly.
-function toProduct(pick, cands, qty) {
+function toProduct(pick: any, cands: any[], qty: number) {
   const c = cands[pick?.candidate_index];
   if (!c || pick.link !== c.link || Number(pick.price) !== c.price) return null;
   const text = `${c.title} ${c.delivery || ''}`.toLowerCase();
   const quote = (pick.raw_spec_quote || '').trim();
   const quoteOk = !!quote && text.includes(quote.toLowerCase());
-  const specs = {}, confidence = {};
+  const specs: any = {}, confidence: any = {};
   for (const k of DIMS) {
     const v = pick.specs?.[k];
     specs[k] = v == null ? null : Number(v);
@@ -54,28 +61,29 @@ function toProduct(pick, cands, qty) {
   };
 }
 
-async function pickProducts(searched) {
-  const lines = searched.filter((s) => s.cands.length).map((s) => ({
-    line_id: s.line.line_id, category: s.line.category, qty: s.line.qty || 1, specs: s.line.specs || {},
-    max_unit_price_usd: s.line.max_unit_price_usd ?? null, reason: s.line.reason || '',
-    candidates: s.cands.map((c, i) => ({ candidate_index: i, title: c.title, store: c.store, price: c.price, link: c.link, delivery: c.delivery, rating: c.rating, reviews: c.reviews })),
-  }));
-  if (!lines.length) return [];
-  const body = {
-    contents: [{ role: 'user', parts: [{ text: `${PROMPT}\n\nLines:\n${JSON.stringify(lines)}` }] }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, thinkingConfig: { thinkingLevel: 'low' } },
+// Match one line against its candidates using the Flash model.
+async function matchLine(line: any, cands: any[]) {
+  if (!cands.length) return { line_id: line.line_id, status: 'not_found', reason: 'No listings found.' };
+  const input = {
+    line_id: line.line_id, category: line.category, qty: line.qty || 1, specs: line.specs || {},
+    max_unit_price_usd: line.max_unit_price_usd ?? null, reason: line.reason || '',
+    candidates: cands.map((c, i) => ({ candidate_index: i, title: c.title, store: c.store, price: c.price, link: c.link, delivery: c.delivery, rating: c.rating, reviews: c.reviews })),
   };
-  for (const model of MODELS) {
-    const r = await generateContent(model, body, 60000);
-    if (!r.ok) continue;
-    try {
-      return JSON.parse((r.data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('')).lines || [];
-    } catch { /* try next model */ }
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: `${PROMPT}\n\nLine:\n${JSON.stringify(input)}` }] }],
+    generationConfig: { responseMimeType: 'application/json', responseSchema: LINE_SCHEMA, thinkingConfig: { thinkingLevel: 'low' } },
+  };
+  const r = await generateContent(MATCH_MODEL, body, 30000);
+  if (!r.ok) return { line_id: line.line_id, status: 'not_found', reason: 'Could not check the listings, try again.' };
+  try {
+    const parsed = JSON.parse((r.data?.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join(''));
+    return { line_id: line.line_id, ...parsed };
+  } catch {
+    return { line_id: line.line_id, status: 'not_found', reason: 'Could not parse the listing check.' };
   }
-  throw new Error('Could not check the listings, try again');
 }
 
-export default async function(req) {
+export default async function(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     const db = base44.asServiceRole;
@@ -96,22 +104,20 @@ export default async function(req) {
     const total = lines.length;
     const run = await db.entities.CreaoRun.create({ event_id, role: 'find_products', by_admin, status: 'running', job_group: progress_id || null, result_text: `0/${total}`, started_at: new Date().toISOString() });
     let done = 0, progress = Promise.resolve();
+
+    // Run all SerpApi searches in parallel
     const searched = await Promise.all(lines.map(async (line) => {
       const q = line.search_query || (line.category || '').replace(/_/g, ' ');
-      let cands = [], error = null;
-      try { cands = await cachedSearch(db, q); } catch (e) { error = e.message; }
+      let cands: any[] = [], error: string | null = null;
+      try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
       const n = ++done;
-      // Chained so progress updates land in order.
       progress = progress.then(() => db.entities.CreaoRun.update(run.id, { result_text: `${n}/${total}` })).catch(() => {});
       await progress;
       return { line, q, cands, error };
     }));
 
-    let picks;
-    try { picks = await pickProducts(searched); } catch (e) {
-      await db.entities.CreaoRun.update(run.id, { status: 'failed', error_code: e.message });
-      return Response.json({ error: e.message }, { status: 502 });
-    }
+    // Match all lines in parallel with the Flash model
+    const picks = await Promise.all(searched.map(({ line, cands }) => matchLine(line, cands)));
 
     const products = searched.map(({ line, q, cands, error }) => {
       const qty = line.qty || 1, ans = picks.find((p) => p.line_id === line.line_id);

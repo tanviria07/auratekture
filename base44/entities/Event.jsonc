@@ -259,6 +259,9 @@
         "ready"
       ],
       "default": "draft"
+    },
+    "theme": {
+      "type": "string"
     }
   },
   "required": [
