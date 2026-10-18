@@ -125,7 +125,7 @@ export default function Studio() {
 
   const updateImage = async () => {
     setUpdating(true);
-    const r = await invoke('generateRoomPreview', { event_id: eventId });
+    const r = await invoke('generateRoomPreview', { event_id: eventId, retry: true });
     if (r.error) toast({ title: 'Could not update the image', description: r.error, variant: 'destructive' });
     else setFacts((f) => ({ ...f, previews: r.previews }));
     setUpdating(false);

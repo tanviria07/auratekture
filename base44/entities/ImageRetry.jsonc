@@ -1,0 +1,15 @@
+{
+  "name": "ImageRetry",
+  "type": "object",
+  "properties": {
+    "visitor_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "visitor_id"
+  ]
+}

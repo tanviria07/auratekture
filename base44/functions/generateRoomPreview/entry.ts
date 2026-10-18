@@ -92,12 +92,22 @@ export default async function(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     const db = base44.asServiceRole;
-    const { event_id } = await req.json();
+    const { event_id, retry } = await req.json();
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
 
     const by_admin = !!(await getAdmin(base44));
 
     const ev = await db.entities.Event.get(event_id);
+    if (retry && !by_admin && ev.visitor_id) {
+      const since = new Date(Date.now() - 3600_000).toISOString();
+      const q = { visitor_id: ev.visitor_id, created_date: { $gte: since } };
+      if ((await db.entities.ImageRetry.count(q)) >= 5) {
+        const { items } = await db.entities.ImageRetry.filter(q, { sort: 'created_date', limit: 1 });
+        const mins = items[0] ? Math.max(1, Math.ceil((new Date(items[0].created_date).getTime() + 3600_000 - Date.now()) / 60000)) : 60;
+        return Response.json({ error: `You've used all 5 image retries this hour. Try again in ${mins} min.` }, { status: 429 });
+      }
+      await db.entities.ImageRetry.create({ visitor_id: ev.visitor_id, event_id });
+    }
     if (!ev.photo_url) return Response.json({ error: 'This room has no photo' }, { status: 400 });
     const kit = buildKit(await loadKitLines(db, ev), ev.products, ev.product_choices).filter((l) => l.product);
     if (!kit.length) return Response.json({ error: 'Find real products first' }, { status: 400 });
