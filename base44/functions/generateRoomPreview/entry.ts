@@ -118,7 +118,7 @@ export default async function(req) {
     const [base, ...refs] = await Promise.all([prepareBase(photo), ...refsLines.map((l) => fetchImage(l.product.image_url, 4_000_000))]);
     const refParts = refs.flatMap((r, i) => (r ? [{ text: `Reference image for: ${describe(refsLines[i])}` }, { inline_data: { mime_type: r.type, data: toB64(r.bytes) } }] : []));
 
-    const prompt = `Edit this exact photo of the user's room. Keep the walls, floor, windows, doors, fireplace, camera angle and lighting unchanged. Add only these items, placed realistically: ${kit.map(describe).join('; ')}. When a reference image is given for an item, match that product's look. Do not add any other objects, people, text or logos.`;
+    const prompt = `Edit this exact photo of the user's room. Keep the walls, floor, windows, doors, fireplace, camera angle and lighting unchanged. Add only these items, placed realistically: ${kit.map(describe).join('; ')}. When a reference image is given for an item, match that product's look. Keep the tree and all decor at least 3 ft away from heat sources${(ev.photo_analysis?.heat_sources || []).length ? ` (${ev.photo_analysis.heat_sources.map((h) => `${h.label} on the ${h.wall} wall`).join(', ')})` : ' such as fireplaces, radiators and heaters'} and keep every door and walkway clear. No candles or open flames. Do not add any other objects, people, text or logos.`;
     const r = await generateContent(IMAGE_MODEL, {
       contents: [{ role: 'user', parts: [{ inline_data: { mime_type: base.type, data: base.data } }, ...refParts, { text: prompt }] }],
       generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: base.ratio, imageSize: '1K' } },

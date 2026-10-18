@@ -1,5 +1,9 @@
 import { base44 } from '@/api/base44Client';
 
+// Calls a backend function; returns its data or { error }.
+export const invoke = (name, body) => base44.functions.invoke(name, body)
+  .then((res) => res.data).catch((e) => ({ error: e.response?.data?.error || e.message }));
+
 // Runs findProducts and reports "done/total" progress while it searches.
 export async function findProducts(eventId, onProgress) {
   const progress_id = crypto.randomUUID();

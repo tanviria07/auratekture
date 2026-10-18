@@ -15,7 +15,7 @@ export default function ProductCard({ line, onSwap }) {
       </div>
       {productUrl(p) && <a href={productUrl(p)} target="_blank" rel="noreferrer" className="text-sm text-primary inline-flex items-center gap-1">View product <ExternalLink className="w-3 h-3" /></a>}
       <SpecList specs={specValues(line, p)} sources={p.specs?.confidence} />
-      {(p.reason || line.reason) && <p className="text-sm text-muted-foreground">{p.reason || line.reason}</p>}
+      {line.reason && <p className="text-sm text-muted-foreground"><span className="font-medium text-foreground">Why: </span>{line.reason}</p>}
       {line.options.length > 1 && (
         <div className="space-y-1.5 border-t pt-3">
           <p className="text-xs font-medium text-muted-foreground">Alternatives</p>

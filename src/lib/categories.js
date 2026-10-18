@@ -16,6 +16,8 @@ export const CATEGORIES = {
   rug: c('Rug', 96, 60, 1, 'room'),
   lamp: c('Lamp', 14, 14, 60, 'room'),
   plant: c('Plant', 18, 18, 36, 'room'),
+  door: c('Door', 36, 4, 80, 'room'),
+  window: c('Window', 36, 4, 48, 'room'),
   other: c('Other', 24, 24, 24, 'room'),
   power_strip: c('Power strip', 12, 3, 2, 'purchasable'),
   extension_cord: c('Extension cord', 8, 8, 3, 'purchasable'),

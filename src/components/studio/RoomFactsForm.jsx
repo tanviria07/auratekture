@@ -5,13 +5,11 @@ import { Loader2 } from 'lucide-react';
 import { PURPOSE_SUGGESTIONS } from '@/lib/savedRooms';
 
 const FIELDS = [
-  ['room_purpose', 'Room purpose', 'text', 'col-span-2'],
-  ['width_ft', 'Width (ft)', 'number'],
-  ['depth_ft', 'Depth (ft)', 'number'],
+  ['room_purpose', "What it's for", 'text', 'col-span-2'],
   ['ceiling_ft', 'Ceiling height (ft)', 'number'],
-  ['headcount', 'People at once', 'number'],
+  ['headcount', 'People', 'number'],
   ['budget', 'Budget ($)', 'number'],
-  ['deadline', 'Deadline', 'date'],
+  ['deadline', 'Needed by', 'date'],
 ];
 
 export default function RoomFactsForm({ facts, onChange, onSave, saving, saved }) {

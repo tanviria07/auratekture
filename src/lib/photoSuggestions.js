@@ -1,46 +1,33 @@
 import { CATEGORIES } from '@/lib/categories';
 
 const heatCategory = (label = '') => (/fire/i.test(label) ? 'fireplace' : 'heater');
+const keyOf = (it) => (it.label || CATEGORIES[it.category]?.label || it.category || '').toLowerCase().trim().replace(/s$/, '');
 
-// existing_items plus detected heat sources, merging the same thing found in both lists.
+// One chip per thing: duplicates (same label) merge, keeping the larger count.
+export function mergeItems(list) {
+  const out = [];
+  for (const it of list || []) {
+    const m = out.find((o) => keyOf(o) === keyOf(it));
+    if (m) { m.count = Math.max(m.count || 1, it.count || 1); m.heat_source = m.heat_source || it.heat_source; }
+    else out.push({ ...it, count: it.count || 1 });
+  }
+  return out;
+}
+
+// Chips from the photo analysis: contents, heat sources, doors and windows.
 export function mergeDetectedItems(analysis) {
-  if (!analysis) return null;
-  const items = (analysis.existing_items || []).map((it) => ({ ...it }));
+  if (!analysis) return [];
+  const items = mergeItems(analysis.existing_items);
   for (const hs of analysis.heat_sources || []) {
     const category = heatCategory(hs.label);
     const match = items.find((it) => it.category === category);
     if (match) match.heat_source = true;
-    else items.push({ category, label: hs.label || CATEGORIES[category]?.label, count: 1, confidence: 0.8, heat_source: true });
+    else items.push({ category, label: CATEGORIES[category].label, count: 1, heat_source: true });
   }
-  return items;
-}
-
-const WALLS = ['left', 'right', 'back', 'front'];
-// Point at fraction t along a wall.
-const wallPoint = (wall, t, W, D) => {
-  const snap = (v) => Math.round(v * 2) / 2;
-  if (wall === 'left') return { x_ft: 0, z_ft: snap(D * t) };
-  if (wall === 'right') return { x_ft: W, z_ft: snap(D * t) };
-  if (wall === 'front') return { x_ft: snap(W * t), z_ft: D };
-  return { x_ft: snap(W * t), z_ft: 0 };
-};
-
-// Doors, windows and heat sources pre-placed on their wall, spread evenly when they share one. Never outlets.
-export function suggestedLayout(analysis, W, D) {
-  const all = [
-    ...(analysis?.doors_and_windows || []).map((d, i) => ({ id: `sug-dw-${i}`, wall: d.wall, kind: /window/i.test(d.type) ? 'window' : 'door' })),
-    ...(analysis?.heat_sources || []).map((hs, i) => ({ id: `sug-heat-${i}`, wall: hs.wall, kind: heatCategory(hs.label) })),
-  ].map((s) => ({ ...s, wall: WALLS.includes(s.wall) ? s.wall : 'back' }));
-  const exits = [], fixtures = [];
-  for (const wall of WALLS) {
-    const on = all.filter((s) => s.wall === wall);
-    on.forEach((s, i) => {
-      const pos = wallPoint(wall, (i + 1) / (on.length + 1), W, D);
-      if (s.kind === 'door') exits.push({ id: s.id, width_ft: 3, ...pos, suggested: true });
-      else fixtures.push({ id: s.id, type: s.kind, ...pos, suggested: true });
-    });
+  const dw = (analysis.doors_and_windows || []).map((d) => (/window/i.test(d.type) ? 'window' : 'door'));
+  for (const k of ['door', 'window']) {
+    const n = dw.filter((x) => x === k).length;
+    if (n) items.push({ category: k, label: CATEGORIES[k].label, count: n });
   }
-  return { exits, fixtures };
+  return mergeItems(items);
 }
-
-export const confirmedOnly = (list) => (list || []).filter((m) => !m.suggested);

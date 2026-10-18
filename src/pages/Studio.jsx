@@ -1,26 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useKitLines } from '@/hooks/use-kit-lines';
-import { buildKit } from '@/lib/kit';
-import { syncBasket } from '@/lib/shop';
-import ShopStep from '@/components/shop/ShopStep';
-import { ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { useKitLines } from '@/hooks/use-kit-lines';
+import { useDesignRun } from '@/hooks/use-design-run';
+import { buildKit } from '@/lib/kit';
+import { findProducts, invoke, syncBasket } from '@/lib/shop';
 import { EMPTY_FACTS } from '@/lib/savedRooms';
 import { getVisitorId } from '@/lib/visitor';
-import { mergeDetectedItems } from '@/lib/photoSuggestions';
+import { mergeDetectedItems, mergeItems } from '@/lib/photoSuggestions';
 import RoomPhoto from '@/components/studio/RoomPhoto';
+import PhotoUpload from '@/components/studio/PhotoUpload';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
-import RoomPreview from '@/components/preview/RoomPreview';
-import StepIndicator from '@/components/studio/StepIndicator';
 import PhotoAnalysis from '@/components/studio/PhotoAnalysis';
 import RoomContents from '@/components/studio/RoomContents';
-import VenueSupplied from '@/components/studio/VenueSupplied';
-import FloorGrid from '@/components/studio/FloorGrid';
-import CheckoutPanel from '@/components/checkout/CheckoutPanel';
+import DesignPanel from '@/components/studio/DesignPanel';
+import SafetyChecks from '@/components/studio/SafetyChecks';
+import ShoppingList from '@/components/studio/ShoppingList';
+import RoomPreview from '@/components/preview/RoomPreview';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
 
@@ -32,15 +29,19 @@ export default function Studio() {
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
+  const [progress, setProgress] = useState('');
+  const [updating, setUpdating] = useState(false);
   const { toast } = useToast();
+  const qc = useQueryClient();
+  const design = useDesignRun();
   const analyzedRef = useRef(false);
+  const factsRef = useRef(facts); factsRef.current = facts;
 
   const analyze = async (id) => {
     setAnalyzing(true); setAnalysisError('');
-    const r = await base44.functions.invoke('analyzeRoomPhoto', { event_id: id })
-      .then((res) => res.data).catch((e) => ({ error: e.response?.data?.error || e.message }));
+    const r = await invoke('analyzeRoomPhoto', { event_id: id });
     if (r.error) setAnalysisError(r.error);
-    else setFacts((f) => ({ ...f, photo_analysis: r.photo_analysis, color_palette: r.color_palette }));
+    else setFacts((f) => ({ ...f, photo_analysis: r.photo_analysis, color_palette: r.color_palette, existing_items: [] }));
     setAnalyzing(false);
   };
 
@@ -49,93 +50,103 @@ export default function Studio() {
     base44.entities.Event.get(eventId).then((e) => {
       setFacts({ ...EMPTY_FACTS, ...e, budget: e.budget_cents != null ? e.budget_cents / 100 : '' });
       setLoaded(true);
-      // First visit after upload only; afterwards analysis runs only via "Analyze again".
       if (e.photo_url && !e.photo_analysis && !analyzedRef.current) { analyzedRef.current = true; analyze(e.id); }
     });
   }, []);
 
-  const factsRef = useRef(facts); factsRef.current = facts;
-  // Saves only fields that actually changed; never reloads the Event.
   const patch = async (data) => {
-    const changed = Object.fromEntries(Object.entries(data).filter(([k, v]) => JSON.stringify(factsRef.current[k]) !== JSON.stringify(v)));
-    if (!Object.keys(changed).length) return;
-    setFacts((f) => ({ ...f, ...changed }));
-    if (eventId) await base44.entities.Event.update(eventId, changed);
+    setFacts((f) => ({ ...f, ...data }));
+    if (eventId) await base44.entities.Event.update(eventId, data);
   };
-  const saveLayout = useCallback((layout) => patch(layout), [eventId]);
 
-  const qc = useQueryClient();
   const kitLines = useKitLines(eventId, facts.kit_lines);
   const kit = useMemo(() => buildKit(kitLines, facts.products, facts.product_choices), [kitLines, facts.products, facts.product_choices]);
-  // Saves product results/choices, then rebuilds the basket from them.
-  const applyProducts = async (data) => {
-    await patch(data);
-    if (!data.products && !data.product_choices) return;
-    await syncBasket(eventId, buildKit(kitLines, data.products ?? factsRef.current.products, data.product_choices ?? factsRef.current.product_choices));
-    qc.invalidateQueries({ queryKey: ['basket', eventId] });
+  const chips = facts.existing_items?.length ? mergeItems(facts.existing_items) : mergeDetectedItems(facts.photo_analysis);
+  const budget = facts.budget === '' ? null : facts.budget;
+
+  const refreshBasket = async (k) => { await syncBasket(eventId, k); qc.invalidateQueries({ queryKey: ['basket', eventId] }); };
+  const swap = async (line_id, i) => {
+    const product_choices = { ...(facts.product_choices || {}), [line_id]: i };
+    await patch({ product_choices });
+    await refreshBasket(buildKit(kitLines, facts.products, product_choices));
   };
-  const swap = (line_id, i) => applyProducts({ product_choices: { ...(facts.product_choices || {}), [line_id]: i } });
 
   const save = async () => {
     setSaving(true);
-    const { budget, ...rest } = facts;
+    const f = factsRef.current;
     const data = {
-      name: rest.name, room_purpose: rest.room_purpose, venue_name: rest.venue_name, width_ft: num(rest.width_ft),
-      depth_ft: num(rest.depth_ft), ceiling_ft: num(rest.ceiling_ft), headcount: num(rest.headcount),
-      budget_cents: budget === '' || budget == null ? null : Math.round(budget * 100), deadline: rest.deadline || undefined, photo_url: rest.photo_url, venue_supplied: rest.venue_supplied, status: 'planning',
+      name: f.name, room_purpose: f.room_purpose, ceiling_ft: num(f.ceiling_ft), headcount: num(f.headcount),
+      budget_cents: f.budget === '' || f.budget == null ? null : Math.round(f.budget * 100), deadline: f.deadline || undefined, photo_url: f.photo_url, status: 'planning',
     };
-    if (eventId) await base44.entities.Event.update(eventId, data);
-    else setEventId((await base44.entities.Event.create({ ...data, visitor_id: getVisitorId() })).id);
+    let id = eventId;
+    if (id) await base44.entities.Event.update(id, data);
+    else { id = (await base44.entities.Event.create({ ...data, visitor_id: getVisitorId() })).id; setEventId(id); }
     setSaving(false);
-    toast({ title: 'Event saved' });
+    return id;
   };
 
+  const onPhoto = async (photo_url) => {
+    setFacts((f) => ({ ...f, photo_url }));
+    factsRef.current = { ...factsRef.current, photo_url };
+    const id = await save();
+    await base44.entities.Event.update(id, { photo_analysis: null, existing_items: [] });
+    analyze(id);
+  };
+
+  const runDesign = async () => {
+    const id = await save();
+    let lines = [];
+    await design.run({
+      kit: async () => { const r = await invoke('proposeKit', { event_id: id }); if (!r.error) { lines = r.kit_lines; setFacts((f) => ({ ...f, kit_lines: lines, products: [], product_choices: {} })); } return r; },
+      find: async () => {
+        setProgress('');
+        const r = await findProducts(id, setProgress);
+        if (r.error) return r;
+        setFacts((f) => ({ ...f, products: r.products, products_at: r.products_at, product_choices: {} }));
+        await refreshBasket(buildKit(lines, r.products, {}));
+        if (!r.products.some((p) => p.status === 'found')) return { error: 'No matching products were found. Try a different budget or purpose.' };
+      },
+      place: async () => { const r = await invoke('generateRoomPreview', { event_id: id }); if (!r.error) setFacts((f) => ({ ...f, previews: r.previews })); return r; },
+    });
+  };
+
+  const updateImage = async () => {
+    setUpdating(true);
+    const r = await invoke('generateRoomPreview', { event_id: eventId });
+    if (r.error) toast({ title: 'Could not update the image', description: r.error, variant: 'destructive' });
+    else setFacts((f) => ({ ...f, previews: r.previews }));
+    setUpdating(false);
+  };
+
+  const chosen = kit.filter((l) => l.product);
   return (
     <div className="max-w-7xl mx-auto px-gutter pb-16 space-y-10">
-      <StepIndicator current={1} />
-      <div>
-        <h1 className="text-3xl">{facts.name}</h1>
-        {facts.venue_name && <p className="text-muted-foreground mt-1">{facts.venue_name}</p>}
-      </div>
+      <h1 className="text-3xl">{facts.name}</h1>
 
-      <div className="grid lg:grid-cols-2 gap-8 items-start">
+      <section className="grid lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-4">
           <RoomPhoto uri={facts.photo_url} />
+          <PhotoUpload hasPhoto={!!facts.photo_url} onUploaded={onPhoto} />
+          {loaded && facts.photo_url && <RoomContents items={chips} onChange={(items) => patch({ existing_items: items })} />}
           <PhotoAnalysis analysis={facts.photo_analysis} palette={facts.color_palette} analyzing={analyzing} error={analysisError} onRetry={() => analyze(eventId)} />
         </div>
         <div className="space-y-6">
-          <RoomFactsForm facts={facts} onChange={(k, v) => setFacts((f) => ({ ...f, [k]: v }))} onSave={save} saving={saving} saved={!!eventId} />
-          <Sheet>
-            <SheetTrigger asChild><Button variant="outline" className="w-full rounded-full"><ShoppingBag className="w-4 h-4" />Checkout</Button></SheetTrigger>
-            <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-              <SheetHeader><SheetTitle>Checkout</SheetTitle></SheetHeader>
-              <div className="mt-6"><CheckoutPanel eventId={eventId} budget={facts.budget === '' ? null : facts.budget} /></div>
-            </SheetContent>
-          </Sheet>
+          <h2 className="text-xl">Your room</h2>
+          <RoomFactsForm facts={facts} onChange={(k, v) => setFacts((f) => ({ ...f, [k]: v }))} onSave={async () => { await save(); toast({ title: 'Saved' }); }} saving={saving} saved={!!eventId} />
+          <DesignPanel {...design} progress={progress} disabled={!facts.photo_url} onRun={runDesign} />
         </div>
-      </div>
+      </section>
 
       {loaded && (
-        <div className="grid lg:grid-cols-2 gap-8">
-          <RoomContents key={facts.photo_analysis ? 'detected' : 'none'}
-            initial={facts.existing_items?.length ? facts.existing_items : mergeDetectedItems(facts.photo_analysis)}
-            onConfirm={async (items) => { await patch({ existing_items: items }); toast({ title: 'Room contents confirmed' }); }} />
-          <VenueSupplied value={facts.venue_supplied} onChange={(v) => setFacts((f) => ({ ...f, venue_supplied: v }))} />
-        </div>
+        <RoomPreview photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices} kit={chosen}
+          onSwap={swap} onUpdate={updateImage} updating={updating} />
       )}
 
-      {loaded && (
-        <FloorGrid key={`${facts.width_ft}x${facts.depth_ft}-${!!facts.photo_analysis}`} width={facts.width_ft} depth={facts.depth_ft} headcount={facts.headcount}
-          initial={facts} analysis={facts.photo_analysis} onSave={saveLayout} />
-      )}
-
-      {loaded && eventId && (
-        <ShopStep eventId={eventId} kit={kit} facts={facts} budget={facts.budget === '' ? null : facts.budget} onApply={applyProducts} onSwap={swap} />
-      )}
-
-      {loaded && eventId && (
-        <RoomPreview eventId={eventId} photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices} kit={kit.filter((l) => l.product)}
-          onSwap={swap} onPreviews={(previews) => setFacts((f) => ({ ...f, previews }))} />
+      {chosen.length > 0 && (
+        <section className="grid lg:grid-cols-[1fr_2fr] gap-8 items-start">
+          <SafetyChecks kit={chosen} ceiling={facts.ceiling_ft} />
+          <ShoppingList kit={chosen} eventId={eventId} budget={budget} />
+        </section>
       )}
     </div>
   );
