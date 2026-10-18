@@ -23,6 +23,10 @@ import DemoRunBar from '@/components/studio/DemoRunBar';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
+import { numberKit } from '@/lib/numbering';
+import { auraContext } from '@/lib/auraContext';
+import { useSiteBridge } from '@/hooks/use-site-bridge';
+import AuraWidget from '@/components/aura/AuraWidget';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
 
@@ -165,6 +169,19 @@ export default function Studio() {
   };
 
   const chosen = kit.filter((l) => l.product);
+  const numbered = numberKit(chosen, facts.previews?.[0]);
+  const [focus, setFocus] = useState(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  useSiteBridge({
+    venue: facts.venue_supplied,
+    setVenue: (v) => patch({ venue_supplied: v }),
+    setRoom: async (data) => { setFacts((f) => ({ ...f, ...data })); factsRef.current = { ...factsRef.current, ...data }; await save(); },
+    design: () => { if (facts.photo_url && !design.busy && !limitBlock) runDesign(); },
+    focus: (n) => { const x = numbered.find((i) => i.n === n); if (x) setFocus({ line_id: x.line.line_id, t: Date.now() }); },
+    swapN: (n, alt) => { const x = numbered.find((i) => i.n === n); if (x && x.line.alternatives?.[alt - 1]) swap(x.line.line_id, alt); },
+    openCheckout: () => { if (chosen.length) setCheckoutOpen(true); },
+  });
+  const auraCtx = auraContext({ facts, design, numbered, chosen, venue: facts.venue_supplied });
   return (
     <div className="max-w-7xl mx-auto px-gutter pb-16 space-y-10">
       <h1 className="text-3xl">{facts.name}</h1>
@@ -190,7 +207,7 @@ export default function Studio() {
 
       {loaded && (
         <RoomPreview photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices} kit={chosen}
-          onSwap={swap} onUpdate={updateImage} updating={updating} theme={facts.theme} />
+          onSwap={swap} onUpdate={updateImage} updating={updating} theme={facts.theme} focus={focus} />
       )}
 
       {chosen.length > 0 && !facts.previews?.length && (
@@ -205,9 +222,10 @@ export default function Studio() {
       {chosen.length > 0 && (
         <section className="grid lg:grid-cols-[1fr_2fr] gap-8 items-start">
           <SafetyChecks kit={chosen} ceiling={facts.ceiling_ft} />
-          <ShoppingList kit={chosen} eventId={eventId} budget={budget} />
+          <ShoppingList kit={chosen} eventId={eventId} budget={budget} open={checkoutOpen} onOpenChange={setCheckoutOpen} />
         </section>
       )}
+      <AuraWidget context={auraCtx} />
     </div>
   );
 }

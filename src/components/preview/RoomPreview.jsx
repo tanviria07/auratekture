@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { numberKit } from '@/lib/numbering';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSignedUrl } from '@/hooks/use-signed-url';
@@ -6,19 +7,15 @@ import BeforeAfter from './BeforeAfter';
 import Hotspot from './Hotspot';
 import NumberLegend from './NumberLegend';
 
-export default function RoomPreview({ photoUrl, previews, choices, kit, onSwap, onUpdate, updating, theme }) {
+export default function RoomPreview({ photoUrl, previews, choices, kit, onSwap, onUpdate, updating, theme, focus }) {
   const latest = previews?.[0];
   const before = useSignedUrl(photoUrl), after = useSignedUrl(latest?.preview_url);
   const [activeId, setActiveId] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  useEffect(() => { if (focus) { setActiveId(focus.line_id); setOpenId(focus.line_id); } }, [focus]);
   if (!latest) return null;
   const stale = JSON.stringify(latest.choices || {}) !== JSON.stringify(choices || {});
-  const spots = latest.hotspots || [];
-  const found = new Set(spots.map((s) => s.line_id));
-  // Number detected items first (in hotspot order), then undetected items.
-  const numbered = [
-    ...spots.map((s, i) => ({ n: i + 1, line: kit.find((l) => l.line_id === s.line_id), spot: s, visible: true })),
-    ...kit.filter((l) => !found.has(l.line_id)).map((l, i) => ({ n: spots.length + i + 1, line: l, spot: null, visible: false })),
-  ].filter((x) => x.line);
+  const numbered = numberKit(kit, latest);
   return (
     <section className="space-y-4">
       {theme && <h2 className="text-2xl font-heading">{theme}</h2>}
@@ -33,7 +30,7 @@ export default function RoomPreview({ photoUrl, previews, choices, kit, onSwap, 
         <p className="text-sm text-muted-foreground">AI preview of your room — illustrative. Products and prices are real; check final placement yourself.</p>
         <Button className="rounded-full" disabled={updating} onClick={onUpdate}>{updating ? <Loader2 className="animate-spin" /> : <RefreshCw />}{stale ? 'Update image' : 'Retry image'}</Button>
       </div>
-      <NumberLegend items={numbered} onSwap={onSwap} activeId={activeId} onHover={setActiveId} />
+      <NumberLegend items={numbered} onSwap={onSwap} activeId={activeId} onHover={setActiveId} openId={openId} onOpen={setOpenId} />
     </section>
   );
 }

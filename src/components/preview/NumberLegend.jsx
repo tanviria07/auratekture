@@ -3,12 +3,12 @@ import { productPrice, lineName } from '@/lib/kit';
 import ProductCard from './ProductCard';
 
 // Numbered legend: number, thumbnail, name, price. Clicking a row opens the product card.
-export default function NumberLegend({ items, onSwap, activeId, onHover }) {
+export default function NumberLegend({ items, onSwap, activeId, onHover, openId, onOpen }) {
   if (!items.length) return null;
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
       {items.map((x) => (
-        <Popover key={x.line.line_id}>
+        <Popover key={x.line.line_id} open={openId === x.line.line_id} onOpenChange={(o) => onOpen(o ? x.line.line_id : null)}>
           <PopoverTrigger asChild>
             <button
               onMouseEnter={() => onHover(x.line.line_id)}

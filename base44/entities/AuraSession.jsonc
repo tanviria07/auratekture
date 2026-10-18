@@ -1,0 +1,15 @@
+{
+  "name": "AuraSession",
+  "type": "object",
+  "properties": {
+    "visitor_id": {
+      "type": "string"
+    },
+    "room_name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "visitor_id"
+  ]
+}

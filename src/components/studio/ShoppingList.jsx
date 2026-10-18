@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import BasketGroups from '@/components/checkout/BasketGroups';
 import CheckoutPanel from '@/components/checkout/CheckoutPanel';
 
-export default function ShoppingList({ kit, eventId, budget }) {
+export default function ShoppingList({ kit, eventId, budget, open, onOpenChange }) {
   const items = kit.filter((l) => l.product).map((l) => ({
     line_id: l.line_id, store: l.product.store, title: l.product.title, qty: l.qty || 1, unit_price_cents: Math.round(l.product.unit_price_usd * 100),
   }));
@@ -15,7 +15,7 @@ export default function ShoppingList({ kit, eventId, budget }) {
       <h2 className="text-xl">Shopping list</h2>
       <BasketGroups items={items} />
       {budget && <p className={`text-sm ${total > budget ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>${total.toFixed(2)} of your ${budget} budget{total > budget && ' — over budget'}</p>}
-      <Sheet>
+      <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetTrigger asChild><Button className="w-full rounded-full" size="lg"><ShoppingBag className="w-4 h-4" />Checkout</Button></SheetTrigger>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader><SheetTitle>Checkout</SheetTitle></SheetHeader>
