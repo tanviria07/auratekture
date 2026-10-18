@@ -32,16 +32,14 @@ export default async function(req) {
     const keys = await getAgentKeys();
     const origin = req.headers.get('X-Base44-App-Url') || new URL(req.url).origin;
     const sandbox = hasVisa();
-    const authorizations = [];
-    for (const [store, amount_cents] of Object.entries(totals)) {
+    const authorizations = await Promise.all(Object.entries(totals).map(async ([store, amount_cents]) => {
       const v = await signedAgentFetch(origin, keys, { mandate_id: m.id, store, amount_cents });
       let r;
       if (v.status !== 200) r = { mode: sandbox ? 'sandbox' : 'simulated', status: 'MERCHANT_REJECTED', transaction_id: '', summary: JSON.stringify(v.body).slice(0, 300) };
       else if (sandbox) r = await authorizeVisa(amount_cents, `${m.id}-${store}`);
       else r = { mode: 'simulated', status: 'SIMULATED', transaction_id: 'sim_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16), summary: 'Simulated: Visa secrets not set' };
-      const rec = await base44.entities.Authorization.create({ mandate_id: m.id, store, amount_cents, mode: r.mode, status: r.status, transaction_id: r.transaction_id || '', response_summary: r.summary });
-      authorizations.push(rec);
-    }
+      return base44.entities.Authorization.create({ mandate_id: m.id, store, amount_cents, mode: r.mode, status: r.status, transaction_id: r.transaction_id || '', response_summary: r.summary });
+    }));
     const allOk = authorizations.every((a) => a.status === 'AUTHORIZED' || a.status === 'SIMULATED');
     await base44.entities.Basket.update(basket.id, { status: allOk ? 'authorized' : 'failed' });
     return Response.json({ authorizations, fingerprint: hash.slice(0, 12), keyid: keys.keyid, time: new Date().toISOString() });

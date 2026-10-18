@@ -8,6 +8,10 @@ import RoomPhoto from '@/components/studio/RoomPhoto';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
 import RoomScene from '@/components/studio/RoomScene';
 import BoxPanel from '@/components/studio/BoxPanel';
+import CheckoutPanel from '@/components/checkout/CheckoutPanel';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { ShoppingBag } from 'lucide-react';
 
 export default function Studio() {
   const params = new URLSearchParams(window.location.search);
@@ -45,6 +49,13 @@ export default function Studio() {
         </div>
         <RoomPhoto uri={facts.photo_url} />
         <RoomFactsForm facts={facts} onChange={(k, v) => setFacts((f) => ({ ...f, [k]: v }))} onSave={save} saving={saving} saved={!!eventId} />
+        <Sheet>
+          <SheetTrigger asChild><Button variant="outline" className="w-full rounded-full"><ShoppingBag className="w-4 h-4" />Checkout</Button></SheetTrigger>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+            <SheetHeader><SheetTitle>Checkout</SheetTitle></SheetHeader>
+            <div className="mt-6"><CheckoutPanel eventId={eventId} budget={facts.budget === '' ? null : facts.budget} /></div>
+          </SheetContent>
+        </Sheet>
       </div>
       <div className="relative h-[520px] lg:h-[calc(100vh-10rem)] rounded-2xl overflow-hidden border bg-card">
         <RoomScene width={facts.width_ft} depth={facts.depth_ft} ceiling={facts.ceiling_ft} onSelect={setSelected} />
