@@ -1,4 +1,4 @@
-import { createElement as h, useRef, useState } from 'react';
+import { createElement as h, useEffect, useRef, useState } from 'react';
 import GridToolbar from './GridToolbar';
 import GridMarker from './GridMarker';
 import DensityNote from './DensityNote';
@@ -32,7 +32,19 @@ export default function FloorGrid({ width, depth, headcount, initial, analysis, 
     const snap = (v, max) => Math.min(max, Math.max(0, Math.round(v * 2) / 2));
     return { x_ft: snap(p.x, W), z_ft: snap(p.y, D) };
   };
-  const commit = (next) => { setLayout(next); onSave(next); };
+  const layoutRef = useRef(layout); layoutRef.current = layout;
+  const saveTimer = useRef(null), lastSaved = useRef(JSON.stringify(layout)), frame = useRef(0);
+  // One debounced save, skipped when nothing changed.
+  const scheduleSave = (next) => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const json = JSON.stringify(next);
+      if (json === lastSaved.current) return;
+      lastSaved.current = json; onSave(next);
+    }, 400);
+  };
+  useEffect(() => () => { clearTimeout(saveTimer.current); cancelAnimationFrame(frame.current); }, []);
+  const commit = (next) => { setLayout(next); scheduleSave(next); };
 
   const place = (e) => {
     const pos = toFt(e), id = crypto.randomUUID().slice(0, 8);
@@ -43,16 +55,26 @@ export default function FloorGrid({ width, depth, headcount, initial, analysis, 
   const down = (kind, id) => (e) => { e.stopPropagation(); svg.current.setPointerCapture(e.pointerId); drag.current = { kind, id, moved: false }; };
   const move = (e) => {
     const d = drag.current; if (!d) return;
-    const pos = toFt(e); d.moved = true;
-    setLayout((l) => ({ ...l, [d.kind]: l[d.kind].map((m) => (m.id === d.id ? { ...m, ...pos, suggested: false } : m)) }));
-  };
-  const up = () => {
-    const d = drag.current; if (!d) return; drag.current = null;
-    setLayout((l) => {
-      const tapped = l[d.kind].find((m) => m.id === d.id);
-      const next = d.moved || tapped?.suggested ? l : { ...l, [d.kind]: l[d.kind].filter((m) => m.id !== d.id) };
-      onSave(next); return next;
+    d.pos = toFt(e);
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      const cur = drag.current; if (!cur?.pos) return;
+      const m0 = layoutRef.current[cur.kind].find((m) => m.id === cur.id);
+      if (m0 && m0.x_ft === cur.pos.x_ft && m0.z_ft === cur.pos.z_ft && !m0.suggested) return;
+      cur.moved = true; const pos = cur.pos;
+      setLayout((l) => ({ ...l, [cur.kind]: l[cur.kind].map((m) => (m.id === cur.id ? { ...m, ...pos, suggested: false } : m)) }));
     });
+  };
+  const up = (e) => {
+    const d = drag.current; if (!d) return; drag.current = null;
+    if (svg.current.hasPointerCapture?.(e.pointerId)) svg.current.releasePointerCapture(e.pointerId);
+    cancelAnimationFrame(frame.current); frame.current = 0;
+    const l = layoutRef.current;
+    let next = l;
+    if (d.moved && d.pos) next = { ...l, [d.kind]: l[d.kind].map((m) => (m.id === d.id ? { ...m, ...d.pos, suggested: false } : m)) };
+    else if (!l[d.kind].find((m) => m.id === d.id)?.suggested) next = { ...l, [d.kind]: l[d.kind].filter((m) => m.id !== d.id) };
+    commit(next);
   };
 
   const lines = [];
@@ -62,7 +84,7 @@ export default function FloorGrid({ width, depth, headcount, initial, analysis, 
   return (
     <div className="space-y-3">
       <GridToolbar {...{ tool, setTool, circuit, setCircuit, exitWidth, setExitWidth, heatType, setHeatType }} />
-      {h('svg', { ref: svg, viewBox: `-1 -1.6 ${W + 2} ${D + 2.6}`, className: 'w-full max-h-[420px] rounded-2xl border bg-card touch-none select-none', onPointerMove: move, onPointerUp: up },
+      {h('svg', { ref: svg, viewBox: `-1 -1.6 ${W + 2} ${D + 2.6}`, className: 'w-full max-h-[420px] rounded-2xl border bg-card touch-none select-none', onPointerMove: move, onPointerUp: up, onPointerCancel: up },
         h('rect', { x: 0, y: 0, width: W, height: D, fill: '#faf7f2', stroke: '#a8a29e', strokeWidth: 0.1, onPointerDown: place }),
         h('g', { pointerEvents: 'none' }, ...lines),
         h('text', { x: W / 2, y: -1.05, fontSize: 0.45, textAnchor: 'middle', fill: '#a8a29e' }, `Back wall · ${W} × ${D} ft`),

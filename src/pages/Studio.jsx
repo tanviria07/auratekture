@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
@@ -30,6 +30,7 @@ export default function Studio() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
   const { toast } = useToast();
+  const analyzedRef = useRef(false);
 
   const analyze = async (id) => {
     setAnalyzing(true); setAnalysisError('');
@@ -45,14 +46,22 @@ export default function Studio() {
     base44.entities.Event.get(eventId).then((e) => {
       setFacts({ ...EMPTY_FACTS, ...e, budget: e.budget_cents != null ? e.budget_cents / 100 : '' });
       setLoaded(true);
-      if (e.photo_url && !e.photo_analysis) analyze(e.id);
+      // First visit after upload only; afterwards analysis runs only via "Analyze again".
+      if (e.photo_url && !e.photo_analysis && !analyzedRef.current) { analyzedRef.current = true; analyze(e.id); }
     });
   }, []);
 
+  const factsRef = useRef(facts); factsRef.current = facts;
+  // Saves only fields that actually changed; never reloads the Event.
   const patch = async (data) => {
-    setFacts((f) => ({ ...f, ...data }));
-    if (eventId) await base44.entities.Event.update(eventId, data);
+    const changed = Object.fromEntries(Object.entries(data).filter(([k, v]) => JSON.stringify(factsRef.current[k]) !== JSON.stringify(v)));
+    if (!Object.keys(changed).length) return;
+    setFacts((f) => ({ ...f, ...changed }));
+    if (eventId) await base44.entities.Event.update(eventId, changed);
   };
+  const confirmedExits = useMemo(() => confirmedOnly(facts.exits), [facts.exits]);
+  const confirmedFixtures = useMemo(() => confirmedOnly(facts.fixtures), [facts.fixtures]);
+  const saveLayout = useCallback((layout) => patch(layout), [eventId]);
 
   const save = async () => {
     setSaving(true);
@@ -104,12 +113,12 @@ export default function Studio() {
 
       {loaded && (
         <FloorGrid key={`${facts.width_ft}x${facts.depth_ft}-${!!facts.photo_analysis}`} width={facts.width_ft} depth={facts.depth_ft} headcount={facts.headcount}
-          initial={facts} analysis={facts.photo_analysis} onSave={(layout) => patch(layout)} />
+          initial={facts} analysis={facts.photo_analysis} onSave={saveLayout} />
       )}
 
       <div className="relative h-[520px] lg:h-[70vh] rounded-2xl overflow-hidden border bg-card">
         <RoomScene width={facts.width_ft} depth={facts.depth_ft} ceiling={facts.ceiling_ft} items={facts.existing_items}
-          outlets={facts.outlets} exits={confirmedOnly(facts.exits)} fixtures={confirmedOnly(facts.fixtures)} onSelect={setSelected} />
+          outlets={facts.outlets} exits={confirmedExits} fixtures={confirmedFixtures} onSelect={setSelected} />
         <BoxPanel box={selected} onClose={() => setSelected(null)} />
       </div>
     </div>

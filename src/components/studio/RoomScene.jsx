@@ -1,4 +1,4 @@
-import { createElement as h } from 'react';
+import { createElement as h, memo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import SampleBox from './SampleBox';
@@ -11,7 +11,7 @@ const plane = (args, color, position, rotation) =>
 const block = (key, { pos, rot }, y, size, color) =>
   h('mesh', { key, position: [pos[0], y, pos[1]], rotation: [0, rot, 0] }, h('boxGeometry', { args: size }), h('meshStandardMaterial', { color }));
 
-export default function RoomScene({ width, depth, ceiling, items, outlets, exits, fixtures, onSelect }) {
+export default memo(function RoomScene({ width, depth, ceiling, items, outlets, exits, fixtures, onSelect }) {
   const W = Math.max(Number(width) || 20, 1), D = Math.max(Number(depth) || 16, 1), C = Math.max(Number(ceiling) || 10, 1);
   const heat = (fixtures || []).filter((f) => f.type !== 'window').map((f) => {
     const big = f.type === 'fireplace', t = big ? 1.5 : 0.7, place = onWall(f.x_ft, f.z_ft, W, D, t);
@@ -32,4 +32,4 @@ export default function RoomScene({ width, depth, ceiling, items, outlets, exits
     ...(fixtures || []).filter((f) => f.type === 'window').map((f) => block(f.id, onWall(f.x_ft, f.z_ft, W, D, 0.12), 5, [3, 3, 0.12], '#7dd3fc')),
     h(OrbitControls, { target: [0, C / 3, 0], maxPolarAngle: Math.PI / 2.05 })
   );
-}
+});
