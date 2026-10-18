@@ -278,6 +278,10 @@
         "timings": {
           "type": "object",
           "additionalProperties": true
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
