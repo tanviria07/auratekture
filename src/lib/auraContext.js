@@ -24,6 +24,7 @@ function stepOf(s, c) {
   if (!s) return 'home';
   if (c.blocked) return 'blocked';
   if (c.paid) return 'paid';
+  if (c.partial) return 'partial';
   if (s.checkout_open) return 'checkout_open';
   if (s.products_ready) return 'products_ready';
   if (s.designing) return 'designing';
@@ -41,5 +42,6 @@ export function buildAuraContext({ onStudio, studio, checkout, rooms }) {
     photo_summary, purpose, ceiling_ft, people, budget, needed_by, already_here, theme, items, total, warnings,
     receipt_total: s ? checkout?.receipt_total ?? null : null,
     trust_check: s ? checkout?.trust || null : null,
+    partial: s ? checkout?.partial ?? null : null,
   };
 }

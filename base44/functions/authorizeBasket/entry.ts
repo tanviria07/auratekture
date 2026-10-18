@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { checkMandate } from '../../shared/mandate.ts';
 import { getAgentKeys, signedAgentFetch } from '../../shared/agentSig.ts';
-import { hasVisa, authorizeVisa } from '../../shared/visa.ts';
+import { hasVisa, authorizeVisa, searchVisaByRef } from '../../shared/visa.ts';
 
 const block = (reason) => Response.json({ error: 'MANDATE_TAMPER_BLOCKED', reason }, { status: 403 });
 
@@ -34,6 +34,19 @@ export default async function(req) {
       const prev = existing[0];
       if (prev && TERMINAL.has(prev.status)) return prev;
 
+      // Reconcile an ambiguous prior attempt (timeout / network error): Visa may already have the charge.
+      // Look it up before retrying, and only retry if Visa has no record of it.
+      if (prev && (prev.status === 'UNKNOWN' || prev.status === 'ERROR') && sandbox) {
+        const found = await searchVisaByRef(ref(store)).catch(() => null);
+        if (found?.found) {
+          const status = found.status === 'AUTHORIZED' ? 'AUTHORIZED' : (found.status || 'DECLINED');
+          return await base44.asServiceRole.entities.Authorization.update(prev.id, {
+            status, transaction_id: found.transaction_id || prev.transaction_id,
+            response_summary: `Visa search: ${found.status || 'transaction'} ${found.transaction_id || ''}`,
+          });
+        }
+      }
+
       // Reserve the row before any external call, so a crash/timeout leaves a traceable PENDING record.
       let rec = prev || await base44.asServiceRole.entities.Authorization.create({ mandate_id: m.id, store, amount_cents, mode: sandbox ? 'sandbox' : 'simulated', status: 'PENDING', transaction_id: '', response_summary: '' });
 
@@ -42,7 +55,7 @@ export default async function(req) {
       if (v.status !== 200) {
         patch = { status: 'MERCHANT_REJECTED', response_summary: JSON.stringify(v.body).slice(0, 300) };
       } else if (sandbox) {
-        const r = await authorizeVisa(amount_cents, ref(store)).catch((e) => ({ status: 'ERROR', summary: String(e?.message || e).slice(0, 300) }));
+        const r = await authorizeVisa(amount_cents, ref(store));
         patch = { status: r.status || 'ERROR', transaction_id: r.transaction_id || '', response_summary: r.summary || JSON.stringify(r).slice(0, 300) };
       } else {
         patch = { status: 'SIMULATED', transaction_id: 'sim_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16), response_summary: 'Simulated: Visa secrets not set' };

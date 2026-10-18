@@ -54,3 +54,17 @@ export const BLOCKS = {
 export const blockOf = (r) => BLOCKS[`${r?.status} ${r?.data?.error}`] || null;
 
 export const money = (c) => `$${(c / 100).toFixed(2)}`;
+
+// Plain-words reason for a store that didn't authorize. Returns null for successes.
+export const plainReason = (a) => {
+  const s = a?.status;
+  if (!s || s === 'AUTHORIZED' || s === 'SIMULATED') return null;
+  if (s === 'DECLINED') return 'The card was declined.';
+  if (s === 'MERCHANT_REJECTED') return 'The store rejected the signed checkout request.';
+  if (s === 'UNKNOWN') return 'The payment service did not respond in time.';
+  if (s === 'ERROR') return 'We could not reach the payment service.';
+  if (typeof s === 'string' && s.startsWith('HTTP_')) return 'The payment service returned an error.';
+  return 'This store could not be authorized.';
+};
+
+export const isAuthorized = (a) => a?.status === 'AUTHORIZED' || a?.status === 'SIMULATED';
