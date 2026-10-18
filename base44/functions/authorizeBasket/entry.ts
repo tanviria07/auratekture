@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
-import { canonicalize, basketHash, storeTotals, fromB64 } from '../../shared/canonical.ts';
+import { checkMandate } from '../../shared/mandate.ts';
 import { getAgentKeys, signedAgentFetch } from '../../shared/agentSig.ts';
 import { hasVisa, authorizeVisa } from '../../shared/visa.ts';
 
@@ -15,16 +15,9 @@ export default async function(req) {
     const { items: [basket] } = await base44.asServiceRole.entities.Basket.filter({ event_id: m.event_id }, { sort: '-created_date', limit: 1 });
     if (!basket) return Response.json({ error: 'No basket for this room' }, { status: 404 });
 
-    if (m.used) return block('Mandate was already used');
-    if (Date.parse(m.expires_at) < Date.now()) return block('Mandate expired');
-    const signed = canonicalize({ event_id: m.event_id, basket_sha256: m.basket_sha256, cap_cents: m.cap_cents, nonce: m.nonce, expires_at: m.expires_at });
-    const pub = await crypto.subtle.importKey('raw', fromB64(m.user_public_key), { name: 'Ed25519' }, false, ['verify']);
-    if (!(await crypto.subtle.verify({ name: 'Ed25519' }, pub, fromB64(m.signature), new TextEncoder().encode(signed)))) return block('Mandate signature invalid');
-    const hash = await basketHash(basket.items);
-    if (hash !== m.basket_sha256) return block('Basket changed after signing');
-    const totals = storeTotals(basket.items);
-    const total = Object.values(totals).reduce((a, b) => a + b, 0);
-    if (total > m.cap_cents) return block('Total exceeds spending cap');
+    const checked = await checkMandate(m, basket.items);
+    if (checked.reason) return block(checked.reason);
+    const { hash, totals } = checked;
 
     await base44.asServiceRole.entities.Mandate.update(m.id, { used: true });
     const keys = await getAgentKeys();

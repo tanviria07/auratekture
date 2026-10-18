@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { base44 } from '@/api/base44Client';
-import { createMandate, call } from '@/lib/trust';
+import { createMandate, call, blockOf } from '@/lib/trust';
 import BasketGroups from './BasketGroups';
 import Receipt from './Receipt';
 import { auraStore } from '@/lib/auraStore';
@@ -33,7 +33,7 @@ export default function CheckoutPanel({ eventId, budget }) {
       auraStore.set({ checkout: { paid: true, receipt_total: r.data.authorizations.reduce((s, a) => s + a.amount_cents, 0) / 100 } });
     } else {
       setError(r);
-      if (r.status === 401 || r.status === 403) auraStore.set({ checkout: { blocked: true } });
+      if (blockOf(r)) auraStore.set({ checkout: { blocked: true } });
     }
     setBusy(false);
   };

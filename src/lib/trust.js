@@ -46,4 +46,11 @@ export const call = (name, payload) => base44.functions.invoke(name, payload)
   .then((r) => ({ status: r.status, data: r.data }))
   .catch((e) => ({ status: e.response?.status, data: e.response?.data || { error: e.message } }));
 
+// The only two results that count as a real block.
+export const BLOCKS = {
+  '403 MANDATE_TAMPER_BLOCKED': 'Blocked: the price changed after you signed.',
+  '401 AGENT_SIGNATURE_INVALID': 'Blocked: the checkout request was altered after the agent signed it.',
+};
+export const blockOf = (r) => BLOCKS[`${r?.status} ${r?.data?.error}`] || null;
+
 export const money = (c) => `$${(c / 100).toFixed(2)}`;
