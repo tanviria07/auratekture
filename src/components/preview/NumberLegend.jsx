@@ -8,7 +8,7 @@ export default function NumberLegend({ items, onSwap, activeId, onHover, openId,
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
       {items.map((x) => (
-        <Popover key={x.line.line_id} open={openId === x.line.line_id} onOpenChange={(o) => onOpen(o ? x.line.line_id : null)}>
+        <Popover key={`${x.line.line_id}-${x.n}`} open={openId === x.line.line_id} onOpenChange={(o) => onOpen(o ? x.line.line_id : null)}>
           <PopoverTrigger asChild>
             <button
               onMouseEnter={() => onHover(x.line.line_id)}

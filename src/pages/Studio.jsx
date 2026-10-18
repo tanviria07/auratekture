@@ -248,7 +248,7 @@ export default function Studio() {
     design_room: () => { if (facts.photo_url && !design.busy && !limitBlock) runDesign(); },
     update_image: () => { if (chosen.length && !updating) updateImage(); },
     focus_product: ({ number } = {}) => { const x = numbered.find((i) => i.n === Number(number)); if (x) setFocus({ line_id: x.line.line_id, t: Date.now() }); },
-    swap_product: ({ number, alternative } = {}) => { const alt = Number(alternative); const x = numbered.find((i) => i.n === Number(number)); if ([1, 2].includes(alt) && x?.line.alternatives?.[alt - 1]) swap(x.line.line_id, alt); },
+    swap_product: ({ number, alternative } = {}) => { const alt = Number(alternative); const x = numbered.find((i) => i.n === Number(number)); if ([1, 2].includes(alt) && x?.line?.options?.[alt]) swap(x.line.line_id, alt); },
     open_checkout: () => { if (chosen.length) setCheckoutOpen(true); },
   });
   const auraCtx = studioContext({ facts, design, numbered, chosen, analyzing, chips, imageUpdated, checkoutOpen });

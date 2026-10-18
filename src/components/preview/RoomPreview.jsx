@@ -22,7 +22,7 @@ export default function RoomPreview({ photoUrl, previews, choices, kit, onSwap, 
       {before && after ? (
         <BeforeAfter before={before} after={after}>
           {numbered.filter((x) => x.visible).map((x) => (
-            <Hotspot key={x.line.line_id} n={x.n} spot={x.spot} line={x.line} onSwap={onSwap} active={activeId === x.line.line_id} />
+            <Hotspot key={`${x.line.line_id}-${x.n}`} n={x.n} spot={x.spot} line={x.line} onSwap={onSwap} active={activeId === x.line.line_id} />
           ))}
         </BeforeAfter>
       ) : <div className="aspect-[4/3] rounded-2xl bg-muted animate-pulse" />}
