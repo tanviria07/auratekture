@@ -1,0 +1,60 @@
+{
+  "name": "CreaoRun",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "job_group": {
+      "type": "string"
+    },
+    "creao_run_id": {
+      "type": "string"
+    },
+    "thread_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "timed_out"
+      ],
+      "default": "pending"
+    },
+    "inputs": {
+      "type": "string"
+    },
+    "result_text": {
+      "type": "string"
+    },
+    "parsed_result": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "error_code": {
+      "type": "string"
+    },
+    "delivery_id": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "role"
+  ]
+}

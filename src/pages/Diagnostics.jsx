@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { DEMO_ROOMS } from '@/lib/savedRooms';
 import GeminiResult from '@/components/diagnostics/GeminiResult';
 import CommerceTools from '@/components/diagnostics/CommerceTools';
+import CreaoBuyerTest from '@/components/diagnostics/CreaoBuyerTest';
 
 export default function Diagnostics() {
   const [result, setResult] = useState(null);
@@ -54,6 +55,7 @@ export default function Diagnostics() {
         <GeminiResult result={result} />
       </section>
       <CommerceTools />
+      <CreaoBuyerTest />
       <section className="rounded-2xl border bg-card p-8 space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-xl">Creao webhook</h2>
