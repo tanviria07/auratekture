@@ -16,7 +16,7 @@ export default function DesignTimings() {
         {runs.map((r) => (
           <li key={r.id} className="flex flex-wrap gap-x-3">
             <span className="text-muted-foreground">{new Date(r.created_date).toLocaleString()} · {r.mode === 'background' ? 'background' : 'fresh'}</span>
-            <span>plan {s(r.plan_ms)} · search {s(r.search_ms)} · match {s(r.match_ms)} · image {s(r.image_ms)} · dots {s(r.dots_ms)} · total {s(r.total_ms)}</span>
+            <span>plan {s(r.plan_ms)} · search {s(r.search_ms)} · match {s(r.match_ms)} · image {s(r.image_ms)}{r.bg_image_ms != null && ` · background picture ${s(r.bg_image_ms)}`} · dots {s(r.dots_ms)} · total {s(r.total_ms)}{r.waited_ms != null && ` · waited after pressing Design: ${s(r.waited_ms)}`}</span>
           </li>
         ))}
       </ul>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { invoke } from '@/lib/shop';
 
@@ -37,10 +37,30 @@ export function usePrefetch({ facts, loaded, busy, save }) {
     const t = setTimeout(async () => {
       started.current = fp;
       const id = await saveRef.current();
-      invoke('prefetchDesign', { event_id: id, fingerprint: fp });
+      const r = await invoke('prefetchDesign', { event_id: id, fingerprint: fp });
+      if (r.ready || r.skipped === 'already') setReadyFor({ id, fp });
     }, all ? 0 : 10000);
     return () => clearTimeout(t);
   }, [fp, ready, all, busy]);
 
-  return { fp, claim: (f) => { started.current = f; } };
+  // Once the background result is ready and the facts sit unchanged for 10s, make the picture too.
+  const [readyFor, setReadyFor] = useState(null);
+  useEffect(() => {
+    if (!readyFor || readyFor.fp !== fp || busy) return;
+    const t = setTimeout(() => { setReadyFor(null); invoke('prefetchImage', { event_id: readyFor.id, fingerprint: fp }); }, 10000);
+    return () => clearTimeout(t);
+  }, [readyFor, fp, busy]);
+
+  return { fp, claim: (f) => { started.current = f; setReadyFor(null); } };
+}
+
+// Waits for the hidden background picture; null if it failed or the facts changed.
+export async function waitImage(id, prefetchId) {
+  for (let i = 0; i < 90; i++) {
+    const p = (await base44.entities.Event.get(id)).prefetch;
+    if (p?.id !== prefetchId || !p.image || p.image.status === 'failed') return null;
+    if (p.image.status === 'ready') return p.image;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return null;
 }

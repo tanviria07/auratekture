@@ -24,7 +24,13 @@
     "image_ms": {
       "type": "number"
     },
+    "bg_image_ms": {
+      "type": "number"
+    },
     "dots_ms": {
+      "type": "number"
+    },
+    "waited_ms": {
       "type": "number"
     },
     "total_ms": {

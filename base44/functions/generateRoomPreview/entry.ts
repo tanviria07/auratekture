@@ -33,12 +33,16 @@ export default async function(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     const db = base44.asServiceRole;
-    const { event_id, retry, edit } = await req.json();
+    const { event_id, retry, edit, background } = await req.json();
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
 
     const by_admin = !!(await getAdmin(base44));
 
-    const ev = await db.entities.Event.get(event_id);
+    const stored = await db.entities.Event.get(event_id);
+    // Background mode: render the hidden background result instead of the room's current products.
+    const pf = stored.prefetch;
+    if (background && pf?.status !== 'ready') return Response.json({ error: 'No background result' }, { status: 400 });
+    const ev = background ? { ...stored, kit_lines: pf.kit_lines, products: pf.products, product_choices: pf.product_choices || {}, theme: pf.theme, previews: [] } : stored;
     if (retry && !by_admin && ev.visitor_id) {
       const since = new Date(Date.now() - 3600_000).toISOString();
       const q = { visitor_id: ev.visitor_id, created_date: { $gte: since } };
@@ -60,7 +64,7 @@ export default async function(req: Request) {
     const imageSize = setting?.value === 'hd' ? '2K' : '1K';
 
     // Count toward the shared hourly limit before calling the model.
-    await db.entities.CreaoRun.create({ event_id, role: 'preview', by_admin, status: 'running', started_at: new Date().toISOString() });
+    if (!background) await db.entities.CreaoRun.create({ event_id, role: 'preview', by_admin, status: 'running', started_at: new Date().toISOString() });
 
     let base: any, parts: any[], prompt: string, hotspots: any[] = [];
     if (changed.length) {
@@ -97,6 +101,7 @@ export default async function(req: Request) {
     const { file_uri } = await db.integrations.Core.UploadPrivateFile({ file: new File([fromB64(out.data)], `preview-${event_id}.png`, { type: mime }) });
 
     const preview = { preview_url: file_uri, prompt, model: `${IMAGE_MODEL} ${imageSize}`, created_at: new Date().toISOString(), hotspots, choices: ev.product_choices || {} };
+    if (background) return Response.json({ preview, ms: r.ms });
     const previews = [preview, ...(ev.previews || [])].slice(0, 3);
     await db.entities.Event.update(event_id, { previews });
     return Response.json({ previews, changed, ms: r.ms });

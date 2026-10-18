@@ -63,8 +63,6 @@ The app is built and hosted on [Base44](https://base44.com). Its backend functio
 - `VISA_KEY_ID`
 - `VISA_SECRET_KEY`
 - `AGENT_SIGNING_PRIVATE_KEY`
-- `CREAO_BUYER_API_KEY`
-- `CREAO_WEBHOOK_TOKEN`
 
 ## Built with
 

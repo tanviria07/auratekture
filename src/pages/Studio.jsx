@@ -28,7 +28,7 @@ import { studioContext } from '@/lib/auraContext';
 import { useStudioActions } from '@/hooks/use-site-bridge';
 import { auraStore } from '@/lib/auraStore';
 import { VENUE_OPTIONS } from '@/lib/categories';
-import { fingerprintOf, usePrefetch, waitPrefetch } from '@/hooks/use-prefetch';
+import { fingerprintOf, usePrefetch, waitImage, waitPrefetch } from '@/hooks/use-prefetch';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
 
@@ -119,16 +119,18 @@ export default function Studio() {
     if (limit.error) { toast({ title: 'Could not start', description: limit.error, variant: 'destructive' }); return; }
     if (!limit.allowed) { setLimitBlock(limit); return; }
     setLimitBlock(null); setImageUpdated(false);
-    let lines = [], pre = null;
+    let lines = [], pre = null, oldPreviews = [];
     const tm = {}, t0 = Date.now();
     await design.run({
       kit: async () => {
+        oldPreviews = factsRef.current.previews || [];
         setFacts((f) => ({ ...f, previews: [] }));
         pre = await waitPrefetch(id, fp);
         if (pre) {
           lines = pre.kit_lines;
           const data = { kit_lines: pre.kit_lines, theme: pre.theme, products: pre.products, product_choices: pre.product_choices || {}, products_at: pre.products_at, products_source: 'live' };
-          await base44.entities.Event.update(id, { ...data, prefetch: null });
+          if (pre.image?.status === 'ready') { data.previews = [pre.image.preview, ...oldPreviews].slice(0, 3); tm.bg_image_ms = pre.image.image_ms; tm.waited_ms = Date.now() - t0; }
+          await base44.entities.Event.update(id, { ...data, prefetch: pre.image?.status === 'running' ? pre : null });
           setFacts((f) => ({ ...f, ...data }));
           Object.assign(tm, pre.timings);
           return;
@@ -150,10 +152,17 @@ export default function Studio() {
         if (!r.products.some((p) => p.status === 'found')) return { error: 'No matching products were found. Try a different budget or purpose.' };
       },
       place: async () => {
+        if (pre?.image?.status === 'ready') return;
+        if (pre?.image?.status === 'running') {
+          const img = await waitImage(id, pre.id);
+          const previews = img ? [img.preview, ...oldPreviews].slice(0, 3) : undefined;
+          await base44.entities.Event.update(id, { prefetch: null, ...(previews && { previews }) });
+          if (img) { tm.bg_image_ms = img.image_ms; tm.waited_ms = Date.now() - t0; setFacts((f) => ({ ...f, previews })); return; }
+        }
         const t = Date.now();
         const r = await invoke('generateRoomPreview', { event_id: id });
         tm.image_ms = Date.now() - t;
-        if (!r.error) setFacts((f) => ({ ...f, previews: r.previews }));
+        if (!r.error) { tm.waited_ms = Date.now() - t0; setFacts((f) => ({ ...f, previews: r.previews })); }
         return r;
       },
       dots: async () => {
