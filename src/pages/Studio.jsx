@@ -1,30 +1,56 @@
 import { useEffect, useState } from 'react';
+import { ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { EMPTY_FACTS } from '@/lib/savedRooms';
-
-const num = (v) => (v === '' || v == null ? null : Number(v));
 import RoomPhoto from '@/components/studio/RoomPhoto';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
 import RoomScene from '@/components/studio/RoomScene';
 import BoxPanel from '@/components/studio/BoxPanel';
+import StepIndicator from '@/components/studio/StepIndicator';
+import PhotoAnalysis from '@/components/studio/PhotoAnalysis';
+import RoomContents from '@/components/studio/RoomContents';
+import VenueSupplied from '@/components/studio/VenueSupplied';
+import FloorGrid from '@/components/studio/FloorGrid';
 import CheckoutPanel from '@/components/checkout/CheckoutPanel';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
-import { ShoppingBag } from 'lucide-react';
+
+const num = (v) => (v === '' || v == null ? null : Number(v));
 
 export default function Studio() {
   const params = new URLSearchParams(window.location.search);
   const [eventId, setEventId] = useState(params.get('event'));
   const [facts, setFacts] = useState(EMPTY_FACTS);
+  const [loaded, setLoaded] = useState(!params.get('event'));
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
   const { toast } = useToast();
+
+  const analyze = async (id) => {
+    setAnalyzing(true); setAnalysisError('');
+    const r = await base44.functions.invoke('analyzeRoomPhoto', { event_id: id })
+      .then((res) => res.data).catch((e) => ({ error: e.response?.data?.error || e.message }));
+    if (r.error) setAnalysisError(r.error);
+    else setFacts((f) => ({ ...f, photo_analysis: r.photo_analysis, color_palette: r.color_palette }));
+    setAnalyzing(false);
+  };
 
   useEffect(() => {
     if (!eventId) return;
-    base44.entities.Event.get(eventId).then((e) => setFacts({ ...EMPTY_FACTS, ...e, budget: e.budget_cents != null ? e.budget_cents / 100 : '' }));
+    base44.entities.Event.get(eventId).then((e) => {
+      setFacts({ ...EMPTY_FACTS, ...e, budget: e.budget_cents != null ? e.budget_cents / 100 : '' });
+      setLoaded(true);
+      if (e.photo_url && !e.photo_analysis) analyze(e.id);
+    });
   }, []);
+
+  const patch = async (data) => {
+    setFacts((f) => ({ ...f, ...data }));
+    if (eventId) await base44.entities.Event.update(eventId, data);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -41,25 +67,49 @@ export default function Studio() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-gutter pb-16 grid lg:grid-cols-[380px_1fr] gap-8">
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl">{facts.name}</h1>
-          {facts.venue_name && <p className="text-muted-foreground mt-1">{facts.venue_name}</p>}
-        </div>
-        <RoomPhoto uri={facts.photo_url} />
-        <RoomFactsForm facts={facts} onChange={(k, v) => setFacts((f) => ({ ...f, [k]: v }))} onSave={save} saving={saving} saved={!!eventId} />
-        <Sheet>
-          <SheetTrigger asChild><Button variant="outline" className="w-full rounded-full"><ShoppingBag className="w-4 h-4" />Checkout</Button></SheetTrigger>
-          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-            <SheetHeader><SheetTitle>Checkout</SheetTitle></SheetHeader>
-            <div className="mt-6"><CheckoutPanel eventId={eventId} budget={facts.budget === '' ? null : facts.budget} /></div>
-          </SheetContent>
-        </Sheet>
+    <div className="max-w-7xl mx-auto px-gutter pb-16 space-y-10">
+      <StepIndicator current={1} />
+      <div>
+        <h1 className="text-3xl">{facts.name}</h1>
+        {facts.venue_name && <p className="text-muted-foreground mt-1">{facts.venue_name}</p>}
       </div>
-      <div className="relative h-[520px] lg:h-[calc(100vh-10rem)] rounded-2xl overflow-hidden border bg-card">
-        <RoomScene width={facts.width_ft} depth={facts.depth_ft} ceiling={facts.ceiling_ft} onSelect={setSelected} />
-        <BoxPanel box={selected} onClose={() => setSelected(null)} />
+
+      <div className="grid lg:grid-cols-2 gap-8 items-start">
+        <div className="space-y-4">
+          <RoomPhoto uri={facts.photo_url} />
+          <PhotoAnalysis analysis={facts.photo_analysis} palette={facts.color_palette} analyzing={analyzing} error={analysisError} onRetry={() => analyze(eventId)} />
+        </div>
+        {loaded && (
+          <FloorGrid key={`${facts.width_ft}x${facts.depth_ft}`} width={facts.width_ft} depth={facts.depth_ft} headcount={facts.headcount}
+            initial={facts} onSave={(layout) => patch(layout)} />
+        )}
+      </div>
+
+      {loaded && (
+        <div className="grid lg:grid-cols-2 gap-8">
+          <RoomContents key={facts.existing_items ? 'saved' : facts.photo_analysis ? 'detected' : 'none'}
+            initial={facts.existing_items || facts.photo_analysis?.existing_items} confirmed={!!facts.existing_items}
+            onConfirm={async (items) => { await patch({ existing_items: items }); toast({ title: 'Room contents confirmed' }); }} />
+          <VenueSupplied initial={facts.venue_supplied} onSave={async (v) => { await patch({ venue_supplied: v }); toast({ title: 'Saved' }); }} />
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-[380px_1fr] gap-8">
+        <div className="space-y-8">
+          <RoomFactsForm facts={facts} onChange={(k, v) => setFacts((f) => ({ ...f, [k]: v }))} onSave={save} saving={saving} saved={!!eventId} />
+          <Sheet>
+            <SheetTrigger asChild><Button variant="outline" className="w-full rounded-full"><ShoppingBag className="w-4 h-4" />Checkout</Button></SheetTrigger>
+            <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+              <SheetHeader><SheetTitle>Checkout</SheetTitle></SheetHeader>
+              <div className="mt-6"><CheckoutPanel eventId={eventId} budget={facts.budget === '' ? null : facts.budget} /></div>
+            </SheetContent>
+          </Sheet>
+        </div>
+        <div className="relative h-[520px] lg:h-[calc(100vh-10rem)] rounded-2xl overflow-hidden border bg-card">
+          <RoomScene width={facts.width_ft} depth={facts.depth_ft} ceiling={facts.ceiling_ft} items={facts.existing_items}
+            outlets={facts.outlets} exits={facts.exits} fixtures={facts.fixtures} onSelect={setSelected} />
+          <BoxPanel box={selected} onClose={() => setSelected(null)} />
+        </div>
       </div>
     </div>
   );

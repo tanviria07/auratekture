@@ -9,7 +9,8 @@ export default function BoxPanel({ box, onClose }) {
           className="absolute top-4 right-4 bottom-4 w-64 rounded-2xl bg-card border shadow-xl p-6">
           <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
           <p className="text-xs uppercase tracking-widest text-muted-foreground">Item</p>
-          <h3 className="text-2xl mt-2">{box.label}</h3>
+          <h3 className="text-2xl mt-2">{box.title || box.label}</h3>
+          {box.title && <p className="text-sm text-muted-foreground mt-1">{box.label}</p>}
         </motion.aside>
       )}
     </AnimatePresence>

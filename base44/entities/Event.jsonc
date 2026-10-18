@@ -36,6 +36,110 @@
     "photo_url": {
       "type": "string"
     },
+    "photo_analysis": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "color_palette": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "existing_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "confidence": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "venue_supplied": {
+      "type": "object",
+      "properties": {
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "other": {
+          "type": "string"
+        }
+      }
+    },
+    "outlets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "x_ft": {
+            "type": "number"
+          },
+          "z_ft": {
+            "type": "number"
+          },
+          "circuit_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "exits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "x_ft": {
+            "type": "number"
+          },
+          "z_ft": {
+            "type": "number"
+          },
+          "width_ft": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "x_ft": {
+            "type": "number"
+          },
+          "z_ft": {
+            "type": "number"
+          }
+        }
+      }
+    },
     "status": {
       "type": "string",
       "enum": [
