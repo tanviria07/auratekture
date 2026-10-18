@@ -108,8 +108,8 @@ export default function Studio() {
         setProgress('');
         const r = await findProducts(id, setProgress);
         if (r.error) return r;
-        setFacts((f) => ({ ...f, products: r.products, products_at: r.products_at, product_choices: {} }));
-        await refreshBasket(buildKit(lines, r.products, {}));
+        setFacts((f) => ({ ...f, products: r.products, products_at: r.products_at, product_choices: r.product_choices || {} }));
+        await refreshBasket(buildKit(lines, r.products, r.product_choices || {}));
         if (!r.products.some((p) => p.status === 'found')) return { error: 'No matching products were found. Try a different budget or purpose.' };
       },
       place: async () => { const r = await invoke('generateRoomPreview', { event_id: id }); if (!r.error) setFacts((f) => ({ ...f, previews: r.previews })); return r; },

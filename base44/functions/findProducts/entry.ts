@@ -3,6 +3,7 @@ import { generateContent } from '../../shared/gemini.ts';
 import { getAdmin } from '../../shared/auth.ts';
 import { loadKitLines } from '../../shared/kit.ts';
 import { cachedSearch } from '../../shared/serpapi.ts';
+import { QUERY } from '../../shared/needRules.ts';
 
 const MATCH_MODEL = 'gemini-3.5-flash';
 const DIMS = ['width_in', 'depth_in', 'height_in', 'watts', 'length_ft'];
@@ -30,13 +31,13 @@ const LINE_SCHEMA = {
 };
 
 const PROMPT = `You are picking a real product for one kit line from Google Shopping candidates.
-Pick the best candidate that fits the specs and costs at most max_unit_price_usd, plus up to 2 alternatives.
+Pick the best candidate that fits the specs. The max_unit_price_usd is a guide, not a hard cap — you may pick a product up to 1.5x that price if it fits the specs better. Also pick up to 2 cheaper alternatives.
 You may ONLY choose among the given candidates: copy candidate_index, link and price exactly. Never invent a product, link or price.
 Prefer major retailers (Amazon, Walmart, Target, Home Depot, Lowe's, Wayfair, Michaels, Kohl's, Macy's, Best Buy). Use eBay or Etsy only if nothing else fits.
 For trees, prefer listings that state the height in the title, and match the height from the specs (height_in_max).
 Fill specs (width_in, depth_in, height_in, watts, length_ft) from the listing text. confidence per spec: "quoted" if the listing states the value, "estimated" if inferred, "missing" if absent (value null).
 Copy the exact listing text you used into raw_spec_quote. Set indoor_rated from the listing text: "yes" if indoor/interior rated, "no" if outdoor only, "not stated" if it does not say.
-If no candidate fits, set status "not_found" and explain in reason; otherwise give a one-sentence reason.`;
+If no candidate fits even at 1.5x the guide price, set status "not_found" and explain in reason; otherwise give a one-sentence reason.`;
 
 function toProduct(pick: any, cands: any[], qty: number) {
   const c = cands[pick?.candidate_index];
@@ -83,6 +84,80 @@ async function matchLine(line: any, cands: any[]) {
   }
 }
 
+// Build a product result from a match answer.
+function buildProduct(line: any, cands: any[], ans: any, error: string | null) {
+  const qty = line.qty || 1;
+  const main = ans?.status === 'found' ? toProduct(ans.pick, cands, qty) : null;
+  if (!main) {
+    const reason = error ? `Search failed: ${error}` : !cands.length ? 'No listings found.'
+      : ans?.status === 'not_found' ? ans.reason : 'The suggested listing did not match a real search result.';
+    return { line_id: line.line_id, status: 'not_found', reason, qty };
+  }
+  const seen = new Set([main.product_url]);
+  const alternatives = (ans.alternatives || []).map((a) => toProduct(a, cands, qty))
+    .filter((a) => a && !seen.has(a.product_url) && seen.add(a.product_url)).slice(0, 2);
+  return { line_id: line.line_id, status: 'found', reason: ans.reason, ...main, alternatives };
+}
+
+// Simpler query for retry round 2: category default + key spec.
+function retryQuery(line: any, round: number) {
+  const cat = line.category.replace(/_/g, ' ');
+  if (round === 2) {
+    const q = QUERY[line.category] || cat;
+    const specs = line.specs || {};
+    if (specs.height_in_max) {
+      const ft = Math.round((specs.height_in_max / 12) * 10) / 10;
+      return `${ft} ft ${q}`;
+    }
+    return q;
+  }
+  return cat; // Round 3: just the item name
+}
+
+// Fit the basket to budget: switch expensive items to cheaper alternatives, then drop low-impact optional items.
+function fitBudget(products: any[], lines: any[], budgetCents: number) {
+  if (!budgetCents) return { products, choices: {} };
+  const budget = budgetCents / 100;
+  const requiredCats = new Set(['christmas_tree', 'string_lights']);
+  const lineMap = new Map(lines.map((l) => [l.line_id, l]));
+  const choices: Record<string, number> = {};
+
+  const selected = (p: any) => {
+    const idx = choices[p.line_id] || 0;
+    return idx === 0 ? p : (p.alternatives || [])[idx - 1] || p;
+  };
+  const total = () => products.filter((p) => p.status === 'found')
+    .reduce((s, p) => s + selected(p).unit_price_usd * (p.qty || 1), 0);
+
+  // Step 1: Switch expensive items to cheaper alternatives
+  if (total() > budget) {
+    const found = products.filter((p) => p.status === 'found')
+      .sort((a, b) => selected(b).unit_price_usd - selected(a).unit_price_usd);
+    for (const p of found) {
+      if (total() <= budget) break;
+      const alts = (p.alternatives || [])
+        .map((a, i) => ({ a, i: i + 1 }))
+        .filter(({ a }) => a.unit_price_usd < selected(p).unit_price_usd)
+        .sort((x, y) => x.a.unit_price_usd - y.a.unit_price_usd);
+      if (alts.length) choices[p.line_id] = alts[0].i;
+    }
+  }
+
+  // Step 2: Drop lowest-impact optional items (never tree or lights)
+  if (total() > budget) {
+    const droppable = products.filter((p) => p.status === 'found')
+      .filter((p) => !requiredCats.has(lineMap.get(p.line_id)?.category || ''))
+      .sort((a, b) => (lineMap.get(a.line_id)?.weight || 1) - (lineMap.get(b.line_id)?.weight || 1));
+    for (const p of droppable) {
+      if (total() <= budget) break;
+      const idx = products.findIndex((pr) => pr.line_id === p.line_id);
+      products[idx] = { line_id: p.line_id, status: 'dropped', reason: 'Dropped to fit budget', qty: p.qty };
+    }
+  }
+
+  return { products, choices };
+}
+
 export default async function(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
@@ -102,41 +177,81 @@ export default async function(req: Request) {
     if (!lines.length) return Response.json({ error: 'Add a kit first' }, { status: 400 });
 
     const total = lines.length;
-    const run = await db.entities.CreaoRun.create({ event_id, role: 'find_products', by_admin, status: 'running', job_group: progress_id || null, result_text: `0/${total}`, started_at: new Date().toISOString() });
-    let done = 0, progress = Promise.resolve();
+    const run = await db.entities.CreaoRun.create({ event_id, role: 'find_products', by_admin, status: 'running', job_group: progress_id || null, result_text: `0 of ${total} found`, started_at: new Date().toISOString() });
+    const setProgress = (txt: string) => { run.result_text = txt; return db.entities.CreaoRun.update(run.id, { result_text: txt }).catch(() => {}); };
 
-    // Run all SerpApi searches in parallel
-    const searched = await Promise.all(lines.map(async (line) => {
+    // Round 1: search all lines with their stylist query, match all in parallel
+    const round1 = await Promise.all(lines.map(async (line) => {
       const q = line.search_query || (line.category || '').replace(/_/g, ' ');
       let cands: any[] = [], error: string | null = null;
       try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
-      const n = ++done;
-      progress = progress.then(() => db.entities.CreaoRun.update(run.id, { result_text: `${n}/${total}` })).catch(() => {});
-      await progress;
       return { line, q, cands, error };
     }));
+    const picks1 = await Promise.all(round1.map(({ line, cands }) => matchLine(line, cands)));
+    let products = round1.map(({ line, q, cands, error }, i) => buildProduct(line, cands, picks1[i], error));
 
-    // Match all lines in parallel with the Flash model
-    const picks = await Promise.all(searched.map(({ line, cands }) => matchLine(line, cands)));
+    let foundCount = products.filter((p) => p.status === 'found').length;
+    await setProgress(`${foundCount} of ${total} found`);
 
-    const products = searched.map(({ line, q, cands, error }) => {
-      const qty = line.qty || 1, ans = picks.find((p) => p.line_id === line.line_id);
-      const main = ans?.status === 'found' ? toProduct(ans.pick, cands, qty) : null;
-      if (!main) {
-        const reason = error ? `Search failed: ${error}` : !cands.length ? `No listings found for "${q}".`
-          : ans?.status === 'not_found' ? ans.reason : 'The suggested listing did not match a real search result.';
-        return { line_id: line.line_id, status: 'not_found', reason, qty };
+    // Round 2: retry not-found lines with a simpler query
+    let notFound = products.filter((p) => p.status === 'not_found').map((p) => p.line_id);
+    if (notFound.length) {
+      const retryLines = lines.filter((l) => notFound.includes(l.line_id));
+      const round2 = await Promise.all(retryLines.map(async (line) => {
+        const q = retryQuery(line, 2);
+        let cands: any[] = [], error: string | null = null;
+        try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
+        return { line, q, cands, error };
+      }));
+      const picks2 = await Promise.all(round2.map(({ line, cands }) => matchLine(line, cands)));
+      const r2products = round2.map(({ line, cands, error }, i) => buildProduct(line, cands, picks2[i], error));
+      for (const np of r2products) {
+        if (np.status === 'found') {
+          const idx = products.findIndex((p) => p.line_id === np.line_id);
+          products[idx] = np;
+        }
       }
-      const seen = new Set([main.product_url]);
-      const alternatives = (ans.alternatives || []).map((a) => toProduct(a, cands, qty))
-        .filter((a) => a && !seen.has(a.product_url) && seen.add(a.product_url)).slice(0, 2);
-      return { line_id: line.line_id, status: 'found', reason: ans.reason, ...main, alternatives };
-    });
+      foundCount = products.filter((p) => p.status === 'found').length;
+      await setProgress(`${foundCount} of ${total} found`);
+    }
+
+    // Round 3: retry still-not-found lines with just the item name
+    notFound = products.filter((p) => p.status === 'not_found').map((p) => p.line_id);
+    if (notFound.length) {
+      const retryLines = lines.filter((l) => notFound.includes(l.line_id));
+      const round3 = await Promise.all(retryLines.map(async (line) => {
+        const q = retryQuery(line, 3);
+        let cands: any[] = [], error: string | null = null;
+        try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
+        return { line, q, cands, error };
+      }));
+      const picks3 = await Promise.all(round3.map(({ line, cands }) => matchLine(line, cands)));
+      const r3products = round3.map(({ line, cands, error }, i) => buildProduct(line, cands, picks3[i], error));
+      for (const np of r3products) {
+        if (np.status === 'found') {
+          const idx = products.findIndex((p) => p.line_id === np.line_id);
+          products[idx] = np;
+        }
+      }
+      foundCount = products.filter((p) => p.status === 'found').length;
+      await setProgress(`${foundCount} of ${total} found`);
+    }
+
+    // Budget fitting: switch to alternatives, then drop optional items
+    const { choices } = fitBudget(products, lines, ev.budget_cents);
+    foundCount = products.filter((p) => p.status === 'found').length;
+    const totalCost = products.filter((p) => p.status === 'found')
+      .reduce((s, p) => {
+        const idx = choices[p.line_id] || 0;
+        const pr = idx === 0 ? p : (p.alternatives || [])[idx - 1] || p;
+        return s + pr.unit_price_usd * (p.qty || 1);
+      }, 0);
+    await setProgress(`${foundCount} of ${total} found, $${totalCost.toFixed(2)}`);
 
     const products_at = new Date().toISOString();
-    await db.entities.Event.update(event_id, { products, products_at, products_source: 'live', product_choices: {} });
+    await db.entities.Event.update(event_id, { products, products_at, products_source: 'live', product_choices: choices });
     await db.entities.CreaoRun.update(run.id, { status: 'completed', completed_at: products_at });
-    return Response.json({ products, products_at });
+    return Response.json({ products, products_at, product_choices: choices });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

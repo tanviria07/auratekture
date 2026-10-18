@@ -22,6 +22,13 @@ export async function searchShopping(q) {
   return { results, ms: Date.now() - start };
 }
 
+// Count of live SerpApi searches today (UTC), for the Diagnostics page.
+export async function countTodaySearches(db) {
+  const since = new Date(Date.now() - DAY_MS).toISOString();
+  const count = await db.entities.SearchCache.count({ fetched_at: { $gte: since } });
+  return count;
+}
+
 // Same search, cached by query for 24 hours.
 export async function cachedSearch(db, query) {
   const since = new Date(Date.now() - DAY_MS).toISOString();

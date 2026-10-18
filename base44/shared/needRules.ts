@@ -1,5 +1,5 @@
 // Deterministic "what's missing" rules: purpose, headcount, ceiling and venue → kit lines with a budget split.
-const QUERY: Record<string, string> = {
+export const QUERY: Record<string, string> = {
   christmas_tree: 'artificial christmas tree', string_lights: 'indoor LED string lights', tree_skirt: 'christmas tree skirt',
   ornaments: 'shatterproof christmas ornaments set', garland: 'christmas garland', wreath: 'christmas wreath',
   tablecloth: 'rectangle tablecloth', speaker: 'portable bluetooth speaker', trash_bin: 'trash can with lid',

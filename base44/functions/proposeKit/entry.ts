@@ -23,6 +23,12 @@ const SCHEMA = {
   required: ['theme', 'items'],
 };
 
+const HOLIDAY_ITEMS = [
+  'christmas_tree', 'tree_skirt', 'tree_topper', 'ornaments', 'string_lights',
+  'garland', 'wreath', 'stockings', 'throw_pillow_covers', 'throw_blanket',
+  'led_candles', 'table_centerpiece',
+];
+
 const toB64 = (bytes: Uint8Array) => { let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(bin); };
 
 async function fetchPhoto(db: any, url: string) {
@@ -36,14 +42,22 @@ async function fetchPhoto(db: any, url: string) {
   } catch { return null; }
 }
 
+function isHoliday(purpose: string) {
+  return /holiday|christmas|xmas|festive/.test((purpose || '').toLowerCase());
+}
+
 // Flash-model stylist: takes the room photo + context and returns a cohesive design concept.
-async function stylist(db: any, ev: any, base: any[]) {
+async function stylist(db: any, ev: any, base: any[], extra: string) {
   const a = ev.photo_analysis || {};
   const budget = ev.budget_cents ? ev.budget_cents / 100 : null;
   const palette = (ev.color_palette || []).join(', ');
   const existing = (ev.existing_items || []).map((i: any) => i.label || i.category).join(', ');
   const venue = (ev.venue_supplied?.options || []).join(', ');
   const requiredLines = base.map((l) => ({ line_id: l.line_id, category: l.category, qty: l.qty, specs: l.specs, reason: l.reason }));
+  const holiday = isHoliday(ev.room_purpose);
+  const holidayChecklist = holiday
+    ? `\nHoliday rooms MUST include all of these unless already in the room or venue-provided: ${HOLIDAY_ITEMS.join(', ')}.`
+    : '';
 
   const prompt = `You are a professional interior stylist designing a cohesive, beautiful setup for this room.
 Purpose: ${ev.room_purpose || 'an event'}
@@ -55,15 +69,17 @@ Already provided by venue (do not buy these): ${venue || 'none'}
 
 Required items with safety specs you MUST include (keep their line_id and specs):
 ${JSON.stringify(requiredLines)}
+${holidayChecklist}
 
 Create a cohesive design concept. Return:
 - theme: a one-line theme (e.g. "Warm Nordic Christmas in charcoal, oak and cream")
-- items: 10 to 14 items total. Include ALL required items above (keep their line_id and specs), plus additional items to complete the design (e.g. tree topper, stockings, throw pillows, throw blanket, rug, centerpiece, LED candles, wreaths, window lights).
+- items: AT LEAST 10 items, up to 14. Include ALL required items above (keep their line_id and specs), plus additional items to complete the design.${holiday ? ' Include every holiday item listed above unless it is already in the room or venue-provided.' : ''}
 - Arrange items in zones: Tree corner, Fireplace and mantel, Windows, Seating area, Tabletop, etc.
 - For each item: category (snake_case), qty, specs (keep required specs, add any), search_query (Google Shopping query, max 8 words, include height for trees, "indoor" for indoor lights, never "candles" or "open flames" — use "LED candles" instead), max_unit_price_usd, zone, placement (where in the room, in words), reason (one sentence).
 - Merge duplicates: if two items serve the same purpose, combine them.
-- Budget: aim for 75 to 95 percent of the budget, never over. If over, drop the lowest-impact optional items first (never drop the tree or lights).
-- Never include open flames, real candles, or non-LED candles.`;
+- Budget: aim for 75 to 95 percent of the budget. If the total of your estimates exceeds the budget, reduce individual estimates (choose simpler items) rather than dropping below 10 items.
+- Never include open flames, real candles, or non-LED candles.
+${extra}`;
 
   const parts: any[] = [];
   const photo = ev.photo_url ? await fetchPhoto(db, ev.photo_url) : null;
@@ -88,7 +104,13 @@ export default async function(req: Request) {
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
     const ev = await db.entities.Event.get(event_id);
     const base = needRules(ev);
-    const concept = await stylist(db, ev, base);
+
+    let concept = await stylist(db, ev, base, '');
+    // Retry once if fewer than 10 items
+    if (concept && concept.items?.length < 10) {
+      const have = concept.items.map((i: any) => i.category).join(', ');
+      concept = await stylist(db, ev, base, `Your previous response had only ${concept.items.length} items (${have}). Add more items from these zones to reach at least 10 total. Keep the items you already have and add the missing ones.`);
+    }
 
     let kit_lines: any[], theme: string | null = null;
     if (concept?.items?.length) {
@@ -102,19 +124,6 @@ export default async function(req: Request) {
         }
         return { line_id: item.line_id || `L${++nextId}`, category: item.category, qty: item.qty || 1, specs: item.specs || {}, search_query: item.search_query, max_unit_price_usd: item.max_unit_price_usd ?? null, zone: item.zone, placement: item.placement, reason: item.reason, weight: 1, enabled: true };
       });
-      // Budget enforcement: drop optional items if over 95% of budget
-      const budget = ev.budget_cents ? ev.budget_cents / 100 : null;
-      if (budget) {
-        const total = () => kit_lines.reduce((s, l) => s + (l.max_unit_price_usd || 0) * (l.qty || 1), 0);
-        if (total() > budget * 0.95) {
-          const requiredCats = new Set(['christmas_tree', 'string_lights']);
-          const droppable = [...kit_lines].filter((l) => !requiredCats.has(l.category)).sort((a, b) => (a.weight || 1) - (b.weight || 1));
-          for (const l of droppable) {
-            if (total() <= budget * 0.95) break;
-            kit_lines = kit_lines.filter((x) => x !== l);
-          }
-        }
-      }
     } else {
       kit_lines = base;
     }
