@@ -8,6 +8,7 @@ import { buildKit } from '@/lib/kit';
 import { findProducts, invoke, syncBasket } from '@/lib/shop';
 import { EMPTY_FACTS } from '@/lib/savedRooms';
 import { getVisitorId } from '@/lib/visitor';
+import { autoRoomName } from '@/lib/roomName';
 import { mergeDetectedItems, mergeItems } from '@/lib/photoSuggestions';
 import RoomPhoto from '@/components/studio/RoomPhoto';
 import PhotoUpload from '@/components/studio/PhotoUpload';
@@ -95,6 +96,11 @@ export default function Studio() {
       name: f.name, room_purpose: f.room_purpose, ceiling_ft: num(f.ceiling_ft), headcount: num(f.headcount),
       budget_cents: f.budget === '' || f.budget == null ? null : Math.round(f.budget * 100), deadline: f.deadline || undefined, photo_url: f.photo_url, status: 'planning',
     };
+    if ((!f.name || f.name === 'New room') && f.room_purpose?.trim()) {
+      data.name = await autoRoomName(f.room_purpose, f.photo_analysis?.room_type, getVisitorId(), eventId);
+      factsRef.current = { ...factsRef.current, name: data.name };
+      setFacts((x) => ({ ...x, name: data.name }));
+    }
     let id = eventId;
     if (id) await base44.entities.Event.update(id, data);
     else { id = (await base44.entities.Event.create({ ...data, visitor_id: getVisitorId() })).id; setEventId(id); }

@@ -15,8 +15,9 @@ const schema = {
     doors_and_windows: { type: 'ARRAY', items: { type: 'OBJECT', properties: { type: { type: 'STRING' }, wall: WALL }, required: ['type', 'wall'] } },
     color_palette_hex: { type: 'ARRAY', items: { type: 'STRING' }, minItems: 3, maxItems: 5 },
     style_notes: { type: 'STRING' },
+    room_type: { type: 'STRING' },
   },
-  required: ['existing_items', 'heat_sources', 'doors_and_windows', 'color_palette_hex', 'style_notes'],
+  required: ['room_type', 'existing_items', 'heat_sources', 'doors_and_windows', 'color_palette_hex', 'style_notes'],
 };
 
 const PROMPT = `You are looking at a photo of a room. Describe only what is clearly visible.
@@ -25,6 +26,7 @@ const PROMPT = `You are looking at a photo of a room. Describe only what is clea
 - doors_and_windows: each visible door or window with its wall.
 - color_palette_hex: 3 to 5 dominant colors from the room as #RRGGBB.
 - style_notes: one sentence about the room's style.
+- room_type: the kind of room in 1-2 lowercase words, e.g. "living room", "conference room", "kitchen", "ballroom", "office".
 Never guess the room's purpose or what event it is for. Never invent items that are not visible.`;
 
 export default async function(req) {
