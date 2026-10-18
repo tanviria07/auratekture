@@ -96,6 +96,10 @@ Two things live outside Base44:
 - **The Aura voice worker** ([auratekture-aura](https://github.com/tanviria07/auratekture-aura)): a small Python process for LiveKit and Synthesia. A voice session has to stay connected for the whole conversation, and Base44 functions are short requests, so it runs separately and talks to the app through LiveKit.
 - **Repo housekeeping:** this README, the page metadata and the config file labels were edited with Claude in Cursor, which is why Claude appears as a contributor.
 
+## Built at LA Hacks
+
+Auratekture was built solo during LA Hacks. The first commit in this repo ("Initial commit") is Base44's starter template (build config and Base44's default starter files), and none of Auratekture's code. Work on the project began on October 17, 2026 at 5:00 PM Pacific time, and every commit since then is hackathon work. The voice concierge has its own repo, [auratekture-aura](https://github.com/tanviria07/auratekture-aura).
+
 ## Built with
 
 Base44 · Gemini · SerpApi · Visa Acceptance · LiveKit · Synthesia
