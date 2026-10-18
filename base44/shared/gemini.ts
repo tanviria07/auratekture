@@ -3,14 +3,14 @@ import { secrets } from 'base44:runtime';
 export const GEMINI_TIMEOUT_MS = 60000;
 
 // Calls Gemini generateContent; returns { ok, status, data, errorText, ms }.
-export async function generateContent(model, body) {
+export async function generateContent(model, body, timeoutMs = GEMINI_TIMEOUT_MS) {
   const start = Date.now();
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': secrets.get('GEMINI_API_KEY') },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const raw = await res.text();
     const ms = Date.now() - start;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { EMPTY_FACTS } from '@/lib/savedRooms';
 import { getVisitorId } from '@/lib/visitor';
-import { mergeDetectedItems, confirmedOnly } from '@/lib/photoSuggestions';
+import { mergeDetectedItems } from '@/lib/photoSuggestions';
 import RoomPhoto from '@/components/studio/RoomPhoto';
 import RoomFactsForm from '@/components/studio/RoomFactsForm';
-import RoomScene from '@/components/studio/RoomScene';
-import BoxPanel from '@/components/studio/BoxPanel';
+import RoomPreview from '@/components/preview/RoomPreview';
 import StepIndicator from '@/components/studio/StepIndicator';
 import PhotoAnalysis from '@/components/studio/PhotoAnalysis';
 import RoomContents from '@/components/studio/RoomContents';
@@ -25,7 +24,6 @@ export default function Studio() {
   const [eventId, setEventId] = useState(params.get('event'));
   const [facts, setFacts] = useState(EMPTY_FACTS);
   const [loaded, setLoaded] = useState(!params.get('event'));
-  const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
@@ -59,8 +57,6 @@ export default function Studio() {
     setFacts((f) => ({ ...f, ...changed }));
     if (eventId) await base44.entities.Event.update(eventId, changed);
   };
-  const confirmedExits = useMemo(() => confirmedOnly(facts.exits), [facts.exits]);
-  const confirmedFixtures = useMemo(() => confirmedOnly(facts.fixtures), [facts.fixtures]);
   const saveLayout = useCallback((layout) => patch(layout), [eventId]);
 
   const save = async () => {
@@ -116,11 +112,10 @@ export default function Studio() {
           initial={facts} analysis={facts.photo_analysis} onSave={saveLayout} />
       )}
 
-      <div className="relative h-[520px] lg:h-[70vh] rounded-2xl overflow-hidden border bg-card">
-        <RoomScene width={facts.width_ft} depth={facts.depth_ft} ceiling={facts.ceiling_ft} items={facts.existing_items}
-          outlets={facts.outlets} exits={confirmedExits} fixtures={confirmedFixtures} onSelect={setSelected} />
-        <BoxPanel box={selected} onClose={() => setSelected(null)} />
-      </div>
+      {loaded && eventId && (
+        <RoomPreview eventId={eventId} photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices}
+          onPatch={patch} onPreviews={(previews) => setFacts((f) => ({ ...f, previews }))} />
+      )}
     </div>
   );
 }

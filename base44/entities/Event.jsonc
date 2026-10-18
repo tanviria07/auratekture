@@ -152,6 +152,42 @@
         }
       }
     },
+    "product_choices": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "previews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "preview_url": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hotspots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "choices": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
     "status": {
       "type": "string",
       "enum": [
