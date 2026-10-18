@@ -18,7 +18,7 @@ export default async function(req) {
     let user = null;
     try { user = await base44.auth.me(); } catch { user = null; }
     const ev = await db.entities.Event.get(event_id).catch(() => null);
-    const owns = ev && (ev.visitor_id === visitor_id || (user && ev.created_by_id === user.id));
+    const owns = ev && (ev.visitor_id === visitor_id || (user && ev.created_by_id === user.id) || user?.role === 'admin');
     if (!owns) return fail(403, 'NOT_YOUR_CHECKOUT', 'This checkout belongs to someone else');
 
     const { items: [last] } = await db.entities.Mandate.filter({ event_id, used: true }, { sort: '-created_date', limit: 1 });
