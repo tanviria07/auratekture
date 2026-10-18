@@ -2,11 +2,11 @@
 
 ## About this project
 
-Auratekture turns a photo of any room into a plan you can buy: upload a photo, describe the room, and get an AI-planned setup of real products with a signed, Visa-verified checkout and the Aura voice concierge.
+Auratekture turns one photo of a room into a styled, ready-to-buy plan. It finds what's missing, picks real products from real stores, shows them in the user's own photo, and pays every store with one signed approval in the Visa Acceptance sandbox.
 
-- `src/`: pages and components (frontend)
-- `base44/`: backend functions, entities, and shared backend code
-- API keys live only in the app's Secrets, never in code or `.env` files committed to the repo
-- The Aura voice worker lives at github.com/tanviria07/auratekture-aura
+- `src/`: pages and components (Home, Studio, Diagnostics)
+- `base44/`: backend functions and data entities
+- API keys live only in Base44 Secrets, never in the code.
+- The Aura voice concierge runs as a separate worker: https://github.com/tanviria07/auratekture-aura
 
 Follow the instructions in `AGENTS.md`.
