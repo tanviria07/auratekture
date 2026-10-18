@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import jpeg from 'npm:jpeg-js@0.4.4';
 import { generateContent } from '../../shared/gemini.ts';
 import { getAdmin } from '../../shared/auth.ts';
-import { buildKit, latestBuyerRun } from '../../shared/kit.ts';
+import { buildKit, loadKitLines } from '../../shared/kit.ts';
 
 const IMAGE_MODEL = 'gemini-nano-banana-2.1';
 const DETECT_MODELS = ['gemini-4-argon', 'gemini-3.5-flash'];
@@ -103,8 +103,8 @@ export default async function(req) {
 
     const ev = await db.entities.Event.get(event_id);
     if (!ev.photo_url) return Response.json({ error: 'This room has no photo' }, { status: 400 });
-    const kit = buildKit(await latestBuyerRun(db, event_id), ev.product_choices);
-    if (!kit.length) return Response.json({ error: 'Shop for a kit first' }, { status: 400 });
+    const kit = buildKit(await loadKitLines(db, ev), ev.products, ev.product_choices).filter((l) => l.product);
+    if (!kit.length) return Response.json({ error: 'Find real products first' }, { status: 400 });
 
     const photoUrl = ev.photo_url.startsWith('http') ? ev.photo_url
       : (await db.integrations.Core.CreateFileSignedUrl({ file_uri: ev.photo_url, expires_in: 300 })).signed_url;

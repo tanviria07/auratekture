@@ -1,0 +1,23 @@
+{
+  "name": "SearchCache",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "fetched_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "query"
+  ]
+}

@@ -152,6 +152,47 @@
         }
       }
     },
+    "kit_lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "products_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "products_source": {
+      "type": "string",
+      "enum": [
+        "live",
+        "demo"
+      ]
+    },
+    "demo_run": {
+      "type": "object",
+      "properties": {
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "products_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
     "product_choices": {
       "type": "object",
       "additionalProperties": true

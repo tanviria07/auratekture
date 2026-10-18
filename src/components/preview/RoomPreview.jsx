@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useSignedUrl } from '@/hooks/use-signed-url';
-import { buildKit } from '@/lib/kit';
 import BeforeAfter from './BeforeAfter';
 import Hotspot from './Hotspot';
 import PreviewControls from './PreviewControls';
 import UndetectedList from './UndetectedList';
 
-export default function RoomPreview({ eventId, photoUrl, previews, choices, onPatch, onPreviews }) {
-  const [run, setRun] = useState(null);
+export default function RoomPreview({ eventId, photoUrl, previews, choices, kit, onSwap: swap, onPreviews }) {
   const [busy, setBusy] = useState(false);
   const [start, setStart] = useState(0);
   const [secs, setSecs] = useState(0);
@@ -17,19 +15,12 @@ export default function RoomPreview({ eventId, photoUrl, previews, choices, onPa
   const before = useSignedUrl(photoUrl), after = useSignedUrl(latest?.preview_url);
 
   useEffect(() => {
-    if (!eventId) return;
-    base44.entities.CreaoRun.filter({ event_id: eventId, role: 'buyer', status: 'completed' }, { sort: '-created_date', limit: 1 })
-      .then((r) => setRun(r.items[0] || null));
-  }, [eventId]);
-  useEffect(() => {
     if (!busy) return;
     const t = setInterval(() => setSecs(Math.round((Date.now() - start) / 1000)), 1000);
     return () => clearInterval(t);
   }, [busy, start]);
 
-  const kit = useMemo(() => buildKit(run, choices), [run, choices]);
   const stale = !!latest && JSON.stringify(latest.choices || {}) !== JSON.stringify(choices || {});
-  const swap = (line_id, i) => onPatch({ product_choices: { ...(choices || {}), [line_id]: i } });
 
   const generate = async () => {
     setBusy(true); setError(''); setStart(Date.now()); setSecs(0);
@@ -47,7 +38,7 @@ export default function RoomPreview({ eventId, photoUrl, previews, choices, onPa
         <h2 className="text-xl">Your room, styled</h2>
         <p className="text-sm text-muted-foreground">AI preview — illustrative. Sizes, power and safety are checked on the floor plan.</p>
       </div>
-      <PreviewControls hasKit={kit.length > 0 && !!photoUrl} hasPreview={!!latest} stale={stale} busy={busy} secs={secs} error={error} onGenerate={generate} />
+      <PreviewControls hasKit={kit.some((l) => l.product) && !!photoUrl} hasPreview={!!latest} stale={stale} busy={busy} secs={secs} error={error} onGenerate={generate} />
       {latest && before && after && (
         <BeforeAfter before={before} after={after}>
           {spots.map((s, i) => {

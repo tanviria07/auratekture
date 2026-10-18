@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useKitLines } from '@/hooks/use-kit-lines';
+import { buildKit } from '@/lib/kit';
+import { syncBasket } from '@/lib/shop';
+import ShopStep from '@/components/shop/ShopStep';
 import { ShoppingBag } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
@@ -59,6 +64,18 @@ export default function Studio() {
   };
   const saveLayout = useCallback((layout) => patch(layout), [eventId]);
 
+  const qc = useQueryClient();
+  const kitLines = useKitLines(eventId, facts.kit_lines);
+  const kit = useMemo(() => buildKit(kitLines, facts.products, facts.product_choices), [kitLines, facts.products, facts.product_choices]);
+  // Saves product results/choices, then rebuilds the basket from them.
+  const applyProducts = async (data) => {
+    await patch(data);
+    if (!data.products && !data.product_choices) return;
+    await syncBasket(eventId, buildKit(kitLines, data.products ?? factsRef.current.products, data.product_choices ?? factsRef.current.product_choices));
+    qc.invalidateQueries({ queryKey: ['basket', eventId] });
+  };
+  const swap = (line_id, i) => applyProducts({ product_choices: { ...(facts.product_choices || {}), [line_id]: i } });
+
   const save = async () => {
     setSaving(true);
     const { budget, ...rest } = facts;
@@ -113,8 +130,12 @@ export default function Studio() {
       )}
 
       {loaded && eventId && (
-        <RoomPreview eventId={eventId} photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices}
-          onPatch={patch} onPreviews={(previews) => setFacts((f) => ({ ...f, previews }))} />
+        <ShopStep eventId={eventId} kit={kit} facts={facts} budget={facts.budget === '' ? null : facts.budget} onApply={applyProducts} onSwap={swap} />
+      )}
+
+      {loaded && eventId && (
+        <RoomPreview eventId={eventId} photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices} kit={kit.filter((l) => l.product)}
+          onSwap={swap} onPreviews={(previews) => setFacts((f) => ({ ...f, previews }))} />
       )}
     </div>
   );

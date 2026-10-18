@@ -40,7 +40,7 @@ export default function TrustCheck({ basket, eventId, capCents }) {
       <p className="font-medium">Trust check</p>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={!!busy} onClick={priceTamper}>{busy === 'price' && <Loader2 className="w-3 h-3 animate-spin" />}Change a price after signing (+$50)</Button>
-        <Button size="sm" variant="outline" disabled={!!busy} onClick={agentTamper}>{busy === 'agent' && <Loader2 className="w-3 h-3 animate-spin" />}Tamper with the agent signature</Button>
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={agentTamper}>{busy === 'agent' && <Loader2 className="w-3 h-3 animate-spin" />}Tamper with the checkout signature</Button>
       </div>
       <Banner r={res} />
     </div>

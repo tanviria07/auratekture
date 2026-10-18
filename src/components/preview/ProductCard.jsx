@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { productPrice, productUrl, lineName } from '@/lib/kit';
+import { productPrice, productUrl, lineName, specValues } from '@/lib/kit';
 import SpecList from './SpecList';
 
 export default function ProductCard({ line, onSwap }) {
@@ -14,7 +14,7 @@ export default function ProductCard({ line, onSwap }) {
         <p className="text-sm text-muted-foreground">{[p.store, price != null && `$${price}`, `qty ${line.qty || 1}`].filter(Boolean).join(' · ')}</p>
       </div>
       {productUrl(p) && <a href={productUrl(p)} target="_blank" rel="noreferrer" className="text-sm text-primary inline-flex items-center gap-1">View product <ExternalLink className="w-3 h-3" /></a>}
-      <SpecList specs={p.specs || line.specs} sources={p.spec_sources} />
+      <SpecList specs={specValues(line, p)} sources={p.specs?.confidence} />
       {(p.reason || line.reason) && <p className="text-sm text-muted-foreground">{p.reason || line.reason}</p>}
       {line.options.length > 1 && (
         <div className="space-y-1.5 border-t pt-3">

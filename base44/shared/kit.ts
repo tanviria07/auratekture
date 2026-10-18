@@ -1,22 +1,21 @@
-// Keep in sync with src/lib/kit.js. Builds kit lines with the chosen product per line.
-export function productRows(result) {
-  return result?.products || result?.results || result?.items || result?.candidates || [];
+// Keep in sync with src/lib/kit.js.
+export function parseKit(run) {
+  try { return JSON.parse(JSON.parse(run?.inputs || '{}').kit_json || '{}').kit_lines || []; } catch { return []; }
 }
 
-export function buildKit(run, choices = {}) {
-  if (!run) return [];
-  let kitLines = [];
-  try { kitLines = JSON.parse(JSON.parse(run.inputs || '{}').kit_json || '{}').kit_lines || []; } catch { kitLines = []; }
-  const rows = productRows(run.parsed_result);
-  return kitLines.map((line) => {
-    const mine = rows.filter((r) => r.line_id === line.line_id);
-    const options = [...mine, ...mine.flatMap((r) => r.alternatives || [])];
+// The Event's kit, falling back to the kit stored on its last shopping run.
+export async function loadKitLines(db, ev) {
+  if (ev.kit_lines?.length) return ev.kit_lines;
+  const { items } = await db.entities.CreaoRun.filter({ event_id: ev.id, role: 'buyer' }, { sort: '-created_date', limit: 1 });
+  return parseKit(items[0]);
+}
+
+// Enabled kit lines with their search result, options (pick + alternatives) and the chosen product.
+export function buildKit(lines, products = [], choices = {}) {
+  return (lines || []).filter((l) => l.enabled !== false).map((line) => {
+    const result = (products || []).find((p) => p.line_id === line.line_id) || null;
+    const options = result?.status === 'found' ? [result, ...(result.alternatives || [])] : [];
     const idx = Math.min(Number(choices?.[line.line_id]) || 0, Math.max(options.length - 1, 0));
-    return { ...line, options, choice: idx, product: options[idx] || null };
+    return { ...line, result, options, choice: idx, product: options[idx] || null };
   });
-}
-
-export async function latestBuyerRun(db, event_id) {
-  const { items } = await db.entities.CreaoRun.filter({ event_id, role: 'buyer', status: 'completed' }, { sort: '-created_date', limit: 1 });
-  return items[0] || null;
 }

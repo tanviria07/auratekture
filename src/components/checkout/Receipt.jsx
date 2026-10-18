@@ -14,7 +14,7 @@ export default function Receipt({ receipt }) {
         </div>
       ))}
       <p><span className="text-muted-foreground">Mandate fingerprint:</span> <span className="font-mono">{receipt.fingerprint}</span></p>
-      <p><span className="text-muted-foreground">Agent key:</span> <span className="font-mono">{receipt.keyid}</span></p>
+      <p><span className="text-muted-foreground">Signing key:</span> <span className="font-mono">{receipt.keyid}</span></p>
       <p><span className="text-muted-foreground">Time:</span> {new Date(receipt.time).toLocaleString()}</p>
     </div>
   );
