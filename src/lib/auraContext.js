@@ -6,7 +6,7 @@ export function studioContext({ facts, design, numbered, chosen, analyzing, chip
   const pa = facts.photo_analysis;
   const venue = facts.venue_supplied;
   return {
-    has_photo: !!facts.photo_url, analyzing, analyzed: !!pa,
+    room_name: facts.name || null, has_photo: !!facts.photo_url, analyzing, analyzed: !!pa,
     designing: design.busy && design.steps.place?.status !== 'done' && !facts.previews?.length,
     products_ready: design.busy && design.steps.find?.status === 'done' && design.steps.place?.status !== 'done' && chosen.length > 0 && !facts.previews?.length,
     designed: chosen.length > 0 && !!facts.previews?.length, image_updated: imageUpdated, checkout_open: checkoutOpen,
@@ -35,9 +35,9 @@ function stepOf(s, c) {
 
 export function buildAuraContext({ onStudio, studio, checkout, rooms }) {
   const s = onStudio ? studio : null;
-  const { has_photo = false, photo_summary = { items: [], style_notes: null, colors: [] }, purpose = null, ceiling_ft = null, people = null, budget = null, needed_by = null, already_here = [], theme = null, items = [], total = 0, warnings = [] } = s || {};
+  const { room_name = null, has_photo = false, photo_summary = { items: [], style_notes: null, colors: [] }, purpose = null, ceiling_ft = null, people = null, budget = null, needed_by = null, already_here = [], theme = null, items = [], total = 0, warnings = [] } = s || {};
   return {
-    page: !s ? 'home' : s.checkout_open ? 'checkout' : 'studio', step: stepOf(s, checkout || {}), has_photo, rooms,
+    page: !s ? 'home' : s.checkout_open ? 'checkout' : 'studio', step: stepOf(s, checkout || {}), room_name, has_photo, rooms,
     photo_summary, purpose, ceiling_ft, people, budget, needed_by, already_here, theme, items, total, warnings,
     receipt_total: s ? checkout?.receipt_total ?? null : null,
   };

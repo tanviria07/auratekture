@@ -36,7 +36,12 @@ export function useGlobalSite(rooms) {
       },
       open_room: ({ name } = {}) => {
         const q = String(name || '').toLowerCase().trim();
-        const r = q && (roomsRef.current || []).find((x) => x.name?.toLowerCase().includes(q));
+        if (!q) return;
+        const all = roomsRef.current || [];
+        const words = q.split(/\s+/);
+        const newest = [...all].sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+        const r = all.find((x) => x.name?.toLowerCase().trim() === q)
+          || newest.find((x) => words.every((w) => x.name?.toLowerCase().includes(w)));
         if (r) go(r.id);
       },
       ...Object.fromEntries(['request_photo', 'update_image', 'set_room', 'mark_already_here', 'design_room', 'focus_product', 'swap_product', 'open_checkout'].map((n) => [n, studio(n)])),
