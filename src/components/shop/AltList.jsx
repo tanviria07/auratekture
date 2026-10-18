@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { productPrice } from '@/lib/kit';
 
 export default function AltList({ line, onSwap }) {
+  if (line.options.length === 1) return <p className="text-xs text-muted-foreground border-t pt-3">No other options found</p>;
   if (line.options.length < 2) return null;
   return (
     <div className="space-y-1.5 border-t pt-3">

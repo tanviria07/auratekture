@@ -155,6 +155,14 @@ function buildProduct(line: any, cands: any[], ans: any, error: string | null) {
   const alternatives = (ans.alternatives || []).map((a) => toProduct(a, cands, qty))
     .filter((a) => a && validateCandidate(line.category, a.title))
     .filter((a) => !seen.has(a.product_url) && seen.add(a.product_url)).slice(0, 2);
+  // Top up from the search results with the same checks (item not a part, within 1.5x price guide).
+  const cap = line.max_unit_price_usd ? line.max_unit_price_usd * 1.5 : Infinity;
+  for (let i = 0; i < cands.length && alternatives.length < 2; i++) {
+    const c = cands[i];
+    if (seen.has(c.link) || !(c.price <= cap) || !validateCandidate(line.category, c.title)) continue;
+    const a = toProduct({ candidate_index: i, link: c.link, price: c.price }, cands, qty);
+    if (a) { seen.add(c.link); alternatives.push(a); }
+  }
   return { line_id: line.line_id, status: 'found', reason: ans.reason, ...main, alternatives };
 }
 
