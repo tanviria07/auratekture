@@ -1,3 +1,4 @@
+// Base44 starter config, kept as generated. Part of Auratekture (LA Hacks).
 import base44 from "@base44/vite-plugin"
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'

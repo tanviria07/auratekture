@@ -80,6 +80,10 @@ The app is built and hosted on [Base44](https://base44.com). Its backend functio
 - `VISA_SECRET_KEY`
 - `AGENT_SIGNING_PRIVATE_KEY`
 
+## Built at LA Hacks
+
+Auratekture was built solo during LA Hacks. The first commit in this repo ("Initial commit") is Base44's starter template (build config and Base44's default starter files), and none of Auratekture's code. Work on the project began on October 17, 2026 at 5:00 PM Pacific time, and every commit since then is hackathon work. The voice concierge has its own repo, [auratekture-aura](https://github.com/tanviria07/auratekture-aura).
+
 ## Built with
 
 Base44 · Gemini · SerpApi · Visa Acceptance · LiveKit · Synthesia

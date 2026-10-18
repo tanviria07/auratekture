@@ -1,3 +1,4 @@
+// Base44 starter config, kept as generated. Part of Auratekture (LA Hacks).
 import globals from "globals";
 import pluginJs from "@eslint/js";
 import pluginReact from "eslint-plugin-react";
