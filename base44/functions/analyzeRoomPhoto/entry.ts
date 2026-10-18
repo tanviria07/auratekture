@@ -20,7 +20,7 @@ const schema = {
 };
 
 const PROMPT = `You are looking at a photo of a room. Describe only what is clearly visible.
-- existing_items: furniture and fixtures actually in the photo, using only the allowed categories (use "other" if none fit). Give a count and a confidence from 0 to 1. Use low confidence (below 0.6) whenever you are unsure.
+- existing_items: furniture and fixtures actually in the photo, using only the allowed categories (use "other" if none fit). Only list things that take up floor space. Never list ceiling- or wall-mounted things that take no floor space (ceiling lights, smoke detectors, wall art, outlets, switches). Do keep fireplaces, radiators and floor vents. Give a count and a confidence from 0 to 1. Use low confidence (below 0.6) whenever you are unsure.
 - heat_sources: fireplaces, heaters or radiators, with the wall they are on (as seen from the camera: left, back, right, front).
 - doors_and_windows: each visible door or window with its wall.
 - color_palette_hex: 3 to 5 dominant colors from the room as #RRGGBB.

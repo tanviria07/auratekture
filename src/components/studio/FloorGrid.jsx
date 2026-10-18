@@ -3,6 +3,7 @@ import GridToolbar from './GridToolbar';
 import GridMarker from './GridMarker';
 import DensityNote from './DensityNote';
 import SuggestedList from './SuggestedList';
+import { useSize } from '@/hooks/use-size';
 import { suggestedLayout } from '@/lib/photoSuggestions';
 
 const KIND = { outlet: 'outlets', exit: 'exits', heat: 'fixtures', window: 'fixtures' };
@@ -20,6 +21,10 @@ export default function FloorGrid({ width, depth, headcount, initial, analysis, 
   const [exitWidth, setExitWidth] = useState(3);
   const [heatType, setHeatType] = useState('fireplace');
   const svg = useRef(null), drag = useRef(null);
+  const size = useSize(svg);
+  // 14px radius (28px target) converted to feet at the current render scale.
+  const scale = size ? Math.min(size.width / (W + 2), size.height / (D + 2.6)) : 30;
+  const hit = Math.max(14 / scale, 0.6);
 
   const toFt = (e) => {
     const pt = svg.current.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
@@ -57,11 +62,11 @@ export default function FloorGrid({ width, depth, headcount, initial, analysis, 
   return (
     <div className="space-y-3">
       <GridToolbar {...{ tool, setTool, circuit, setCircuit, exitWidth, setExitWidth, heatType, setHeatType }} />
-      {h('svg', { ref: svg, viewBox: `-0.5 -0.5 ${W + 1} ${D + 1}`, className: 'w-full max-h-[420px] rounded-2xl border bg-card touch-none select-none', onPointerMove: move, onPointerUp: up },
+      {h('svg', { ref: svg, viewBox: `-1 -1.6 ${W + 2} ${D + 2.6}`, className: 'w-full max-h-[420px] rounded-2xl border bg-card touch-none select-none', onPointerMove: move, onPointerUp: up },
         h('rect', { x: 0, y: 0, width: W, height: D, fill: '#faf7f2', stroke: '#a8a29e', strokeWidth: 0.1, onPointerDown: place }),
         h('g', { pointerEvents: 'none' }, ...lines),
-        h('text', { x: W / 2, y: -0.15, fontSize: 0.45, textAnchor: 'middle', fill: '#a8a29e' }, `Back wall · ${W} × ${D} ft`),
-        ...['outlets', 'exits', 'fixtures'].flatMap((k) => layout[k].map((m) => h(GridMarker, { key: m.id, kind: k, m, W, onDown: down(k, m.id) }))))}
+        h('text', { x: W / 2, y: -1.05, fontSize: 0.45, textAnchor: 'middle', fill: '#a8a29e' }, `Back wall · ${W} × ${D} ft`),
+        ...['outlets', 'exits', 'fixtures'].flatMap((k) => layout[k].map((m) => h(GridMarker, { key: m.id, kind: k, m, W, hit, onDown: down(k, m.id) }))))}
       <SuggestedList layout={layout} onConfirm={(k, id) => setMark(k, id, (m) => [{ ...m, suggested: false }])} onDismiss={(k, id) => setMark(k, id, () => [])} />
       <DensityNote W={W} D={D} headcount={Number(headcount)} hasOutlets={layout.outlets.length > 0} />
     </div>

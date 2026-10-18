@@ -15,18 +15,31 @@ export function mergeDetectedItems(analysis) {
   return items;
 }
 
-const wallCenter = (wall, W, D) => ({ left: [0, D / 2], right: [W, D / 2], back: [W / 2, 0], front: [W / 2, D] }[wall] || [W / 2, 0]);
+const WALLS = ['left', 'right', 'back', 'front'];
+// Point at fraction t along a wall.
+const wallPoint = (wall, t, W, D) => {
+  const snap = (v) => Math.round(v * 2) / 2;
+  if (wall === 'left') return { x_ft: 0, z_ft: snap(D * t) };
+  if (wall === 'right') return { x_ft: W, z_ft: snap(D * t) };
+  if (wall === 'front') return { x_ft: snap(W * t), z_ft: D };
+  return { x_ft: snap(W * t), z_ft: 0 };
+};
 
-// Doors, windows and heat sources pre-placed at the center of their wall. Never outlets.
+// Doors, windows and heat sources pre-placed on their wall, spread evenly when they share one. Never outlets.
 export function suggestedLayout(analysis, W, D) {
+  const all = [
+    ...(analysis?.doors_and_windows || []).map((d, i) => ({ id: `sug-dw-${i}`, wall: d.wall, kind: /window/i.test(d.type) ? 'window' : 'door' })),
+    ...(analysis?.heat_sources || []).map((hs, i) => ({ id: `sug-heat-${i}`, wall: hs.wall, kind: heatCategory(hs.label) })),
+  ].map((s) => ({ ...s, wall: WALLS.includes(s.wall) ? s.wall : 'back' }));
   const exits = [], fixtures = [];
-  const at = (wall) => { const [x, z] = wallCenter(wall, W, D); return { x_ft: x, z_ft: z }; };
-  (analysis?.doors_and_windows || []).forEach((d, i) => {
-    const id = `sug-dw-${i}`;
-    if (/window/i.test(d.type)) fixtures.push({ id, type: 'window', ...at(d.wall), suggested: true });
-    else exits.push({ id, width_ft: 3, ...at(d.wall), suggested: true });
-  });
-  (analysis?.heat_sources || []).forEach((hs, i) => fixtures.push({ id: `sug-heat-${i}`, type: heatCategory(hs.label), ...at(hs.wall), suggested: true }));
+  for (const wall of WALLS) {
+    const on = all.filter((s) => s.wall === wall);
+    on.forEach((s, i) => {
+      const pos = wallPoint(wall, (i + 1) / (on.length + 1), W, D);
+      if (s.kind === 'door') exits.push({ id: s.id, width_ft: 3, ...pos, suggested: true });
+      else fixtures.push({ id: s.id, type: s.kind, ...pos, suggested: true });
+    });
+  }
   return { exits, fixtures };
 }
 
