@@ -1,3 +1,4 @@
+// Base44 starter config, kept as generated. Part of Auratekture (LA Hacks).
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     darkMode: ["class"],
