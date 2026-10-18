@@ -6,6 +6,8 @@ import { DEMO_ROOMS } from '@/lib/savedRooms';
 import GeminiResult from '@/components/diagnostics/GeminiResult';
 import CommerceTools from '@/components/diagnostics/CommerceTools';
 import SerpApiTest from '@/components/diagnostics/SerpApiTest';
+import DesignTimings from '@/components/diagnostics/DesignTimings';
+import ImageQuality from '@/components/diagnostics/ImageQuality';
 
 export default function Diagnostics() {
   const [result, setResult] = useState(null);
@@ -33,6 +35,8 @@ export default function Diagnostics() {
   return (
     <div className="max-w-3xl mx-auto px-gutter pb-section space-y-12">
       <h1 className="text-4xl">Diagnostics</h1>
+      <DesignTimings />
+      <ImageQuality />
       <section className="rounded-2xl border bg-card p-8 space-y-4">
         <h2 className="text-xl">Demo data</h2>
         <Button variant="outline" onClick={loadDemo} disabled={loadingDemo} className="rounded-full">{loadingDemo && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Load demo rooms</Button>

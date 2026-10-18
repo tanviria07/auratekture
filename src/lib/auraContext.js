@@ -6,7 +6,9 @@ export function studioContext({ facts, design, numbered, chosen, analyzing, chip
   const pa = facts.photo_analysis;
   const venue = facts.venue_supplied;
   return {
-    has_photo: !!facts.photo_url, analyzing, analyzed: !!pa, designing: design.busy,
+    has_photo: !!facts.photo_url, analyzing, analyzed: !!pa,
+    designing: design.busy && design.steps.place?.status !== 'done',
+    products_ready: design.busy && design.steps.find?.status === 'done' && design.steps.place?.status !== 'done' && chosen.length > 0,
     designed: chosen.length > 0 && !!facts.previews?.length, image_updated: imageUpdated, checkout_open: checkoutOpen,
     photo_summary: { items: (chips || []).map((c) => c.label), style_notes: pa?.style_notes || pa?.style || null, colors: facts.color_palette || [] },
     purpose: facts.room_purpose || null, ceiling_ft: facts.ceiling_ft || null, people: facts.headcount || null,
@@ -23,6 +25,7 @@ function stepOf(s, c) {
   if (c.blocked) return 'blocked';
   if (c.paid) return 'paid';
   if (s.checkout_open) return 'checkout_open';
+  if (s.products_ready) return 'products_ready';
   if (s.designing) return 'designing';
   if (!s.has_photo) return 'need_photo';
   if (s.analyzing) return 'analyzing';

@@ -5,6 +5,7 @@ import ProductCard from './ProductCard';
 // 32px numbered dot: white fill, dark ring, bold number, shadow. Pulses once on appear.
 export default function Hotspot({ n, spot, line, onSwap, active }) {
   return (
+    <span className="animate-in fade-in duration-700">
     <Popover>
       <PopoverTrigger asChild>
         <button
@@ -18,5 +19,6 @@ export default function Hotspot({ n, spot, line, onSwap, active }) {
       </PopoverTrigger>
       <PopoverContent className="w-auto"><ProductCard line={line} onSwap={onSwap} /></PopoverContent>
     </Popover>
+    </span>
   );
 }

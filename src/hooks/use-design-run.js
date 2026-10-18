@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const STEPS = [['kit', "Planning what's missing"], ['find', 'Finding real products'], ['place', 'Placing them in your room']];
+export const STEPS = [['kit', "Planning what's missing"], ['find', 'Finding real products'], ['place', 'Placing them in your room'], ['dots', 'Numbering the items']];
 
 // Runs the step tasks in order; each task returns { error } to stop the run.
 export function useDesignRun() {

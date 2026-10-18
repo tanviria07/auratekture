@@ -28,6 +28,7 @@ import { studioContext } from '@/lib/auraContext';
 import { useStudioActions } from '@/hooks/use-site-bridge';
 import { auraStore } from '@/lib/auraStore';
 import { VENUE_OPTIONS } from '@/lib/categories';
+import { fingerprintOf, usePrefetch, waitPrefetch } from '@/hooks/use-prefetch';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
 
@@ -112,30 +113,68 @@ export default function Studio() {
 
   const runDesign = async () => {
     const id = await save();
+    const fp = fingerprintOf(factsRef.current);
+    prefetch.claim(fp);
     const limit = await invoke('checkDesignLimit', { event_id: id });
     if (limit.error) { toast({ title: 'Could not start', description: limit.error, variant: 'destructive' }); return; }
     if (!limit.allowed) { setLimitBlock(limit); return; }
     setLimitBlock(null); setImageUpdated(false);
-    let lines = [];
+    let lines = [], pre = null;
+    const tm = {}, t0 = Date.now();
     await design.run({
-      kit: async () => { const r = await invoke('proposeKit', { event_id: id }); if (!r.error) { lines = r.kit_lines; setFacts((f) => ({ ...f, kit_lines: lines, products: [], product_choices: {}, theme: r.theme })); } return r; },
+      kit: async () => {
+        setFacts((f) => ({ ...f, previews: [] }));
+        pre = await waitPrefetch(id, fp);
+        if (pre) {
+          lines = pre.kit_lines;
+          const data = { kit_lines: pre.kit_lines, theme: pre.theme, products: pre.products, product_choices: pre.product_choices || {}, products_at: pre.products_at, products_source: 'live' };
+          await base44.entities.Event.update(id, { ...data, prefetch: null });
+          setFacts((f) => ({ ...f, ...data }));
+          Object.assign(tm, pre.timings);
+          return;
+        }
+        const t = Date.now();
+        const r = await invoke('proposeKit', { event_id: id });
+        tm.plan_ms = Date.now() - t;
+        if (!r.error) { lines = r.kit_lines; setFacts((f) => ({ ...f, kit_lines: lines, products: [], product_choices: {}, theme: r.theme })); }
+        return r;
+      },
       find: async () => {
+        if (pre) { await refreshBasket(buildKit(lines, pre.products, pre.product_choices || {})); return; }
         setProgress('');
         const r = await findProducts(id, setProgress);
         if (r.error) return r;
+        Object.assign(tm, r.timings);
         setFacts((f) => ({ ...f, products: r.products, products_at: r.products_at, product_choices: r.product_choices || {} }));
         await refreshBasket(buildKit(lines, r.products, r.product_choices || {}));
         if (!r.products.some((p) => p.status === 'found')) return { error: 'No matching products were found. Try a different budget or purpose.' };
       },
-      place: async () => { const r = await invoke('generateRoomPreview', { event_id: id }); if (!r.error) setFacts((f) => ({ ...f, previews: r.previews })); return r; },
+      place: async () => {
+        const t = Date.now();
+        const r = await invoke('generateRoomPreview', { event_id: id });
+        tm.image_ms = Date.now() - t;
+        if (!r.error) setFacts((f) => ({ ...f, previews: r.previews }));
+        return r;
+      },
+      dots: async () => {
+        const t = Date.now();
+        const r = await invoke('detectHotspots', { event_id: id });
+        tm.dots_ms = Date.now() - t;
+        if (!r.error) setFacts((f) => ({ ...f, previews: r.previews }));
+        base44.entities.DesignTiming.create({ event_id: id, mode: pre ? 'background' : 'fresh', ...tm, total_ms: Date.now() - t0 });
+      },
     });
   };
 
   const updateImage = async () => {
     setUpdating(true);
-    const r = await invoke('generateRoomPreview', { event_id: eventId, retry: true });
+    const r = await invoke('generateRoomPreview', { event_id: eventId, retry: true, edit: true });
     if (r.error) toast({ title: 'Could not update the image', description: r.error, variant: 'destructive' });
-    else { setFacts((f) => ({ ...f, previews: r.previews })); setImageUpdated(true); }
+    else {
+      setFacts((f) => ({ ...f, previews: r.previews })); setImageUpdated(true);
+      invoke('detectHotspots', { event_id: eventId, only: r.changed?.length ? r.changed : undefined })
+        .then((d) => { if (!d.error) setFacts((f) => ({ ...f, previews: d.previews })); });
+    }
     setUpdating(false);
   };
 
@@ -172,6 +211,7 @@ export default function Studio() {
     setDemoBusy(false);
   };
 
+  const prefetch = usePrefetch({ facts, loaded, busy: design.busy, save });
   const chosen = kit.filter((l) => l.product);
   const numbered = numberKit(chosen, facts.previews?.[0]);
   const [focus, setFocus] = useState(null);
@@ -228,7 +268,7 @@ export default function Studio() {
           onSwap={swap} onUpdate={updateImage} updating={updating} theme={facts.theme} focus={focus} />
       )}
 
-      {chosen.length > 0 && !facts.previews?.length && (
+      {chosen.length > 0 && !facts.previews?.length && !design.busy && (
         <section className="rounded-2xl border bg-card p-6 space-y-3">
           <p className="text-sm text-muted-foreground">The room image didn't generate. Retry with the products already found, no new search needed.</p>
           <Button variant="outline" onClick={updateImage} disabled={updating}>

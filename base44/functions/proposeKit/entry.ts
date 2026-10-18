@@ -100,7 +100,7 @@ ${extra}`;
 export default async function(req: Request) {
   try {
     const db = createClientFromRequest(req).asServiceRole;
-    const { event_id } = await req.json();
+    const { event_id, dry } = await req.json();
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
     const ev = await db.entities.Event.get(event_id);
     const base = needRules(ev);
@@ -128,7 +128,7 @@ export default async function(req: Request) {
       kit_lines = base;
     }
 
-    await db.entities.Event.update(event_id, { kit_lines, products: [], product_choices: {}, theme });
+    if (!dry) await db.entities.Event.update(event_id, { kit_lines, products: [], product_choices: {}, theme });
     return Response.json({ kit_lines, theme });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

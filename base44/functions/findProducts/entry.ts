@@ -4,6 +4,7 @@ import { getAdmin } from '../../shared/auth.ts';
 import { loadKitLines } from '../../shared/kit.ts';
 import { cachedSearch } from '../../shared/serpapi.ts';
 import { QUERY } from '../../shared/needRules.ts';
+import { prepareRef } from '../../shared/image.ts';
 
 const MATCH_MODEL = 'gemini-3.5-flash';
 const DIMS = ['width_in', 'depth_in', 'height_in', 'watts', 'length_ft'];
@@ -108,7 +109,7 @@ async function matchLine(line: any, cands: any[]) {
   };
   const body = {
     contents: [{ role: 'user', parts: [{ text: `${PROMPT}\n\nLine:\n${JSON.stringify(input)}` }] }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: LINE_SCHEMA, thinkingConfig: { thinkingLevel: 'low' } },
+    generationConfig: { responseMimeType: 'application/json', responseSchema: LINE_SCHEMA, thinkingConfig: { thinkingLevel: 'minimal' } },
   };
   const r = await generateContent(MATCH_MODEL, body, 30000);
   if (!r.ok) return { line_id: line.line_id, status: 'not_found', reason: 'Could not check the listings, try again.' };
@@ -219,7 +220,7 @@ export default async function(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     const db = base44.asServiceRole;
-    const { event_id, progress_id } = await req.json();
+    const { event_id, progress_id, kit_lines, dry } = await req.json();
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
 
     const by_admin = !!(await getAdmin(base44));
@@ -234,7 +235,18 @@ export default async function(req: Request) {
       const globalRuns = await db.entities.DesignRun.count({ by_admin: { $ne: true }, created_date: { $gte: since } });
       if (globalRuns >= 15) return Response.json({ error: 'Our service is busy right now. Try again in a few minutes.' }, { status: 429 });
     }
-    const lines = (await loadKitLines(db, ev)).filter((l) => l.enabled !== false);
+    const lines = (await loadKitLines(db, kit_lines ? { ...ev, kit_lines } : ev)).filter((l) => l.enabled !== false);
+    // Download + shrink each found product's photo while matching continues, so the image step doesn't wait.
+    const withRef = async (p: any) => {
+      if (p.status !== 'found' || !p.image_url) return p;
+      const r = await prepareRef(p.image_url);
+      if (!r) return p;
+      try {
+        const { file_url } = await db.integrations.Core.UploadPublicFile({ file: new File([r.bytes], r.type === 'image/jpeg' ? 'ref.jpg' : 'ref', { type: r.type }) });
+        return { ...p, ref_url: file_url };
+      } catch { return p; }
+    };
+    let t = Date.now(), search_ms = 0, match_ms = 0;
     if (!lines.length) return Response.json({ error: 'Add a kit first' }, { status: 400 });
 
     const total = lines.length;
@@ -248,7 +260,9 @@ export default async function(req: Request) {
       try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
       return { line, q, cands, error };
     }));
-    let products = await Promise.all(round1.map(({ line, cands, error }) => matchAndBuild(line, cands, error)));
+    search_ms += Date.now() - t; t = Date.now();
+    let products = await Promise.all(round1.map(({ line, cands, error }) => matchAndBuild(line, cands, error).then(withRef)));
+    match_ms += Date.now() - t;
 
     let foundCount = products.filter((p) => p.status === 'found').length;
     await setProgress(`${foundCount} of ${total} found`);
@@ -257,13 +271,16 @@ export default async function(req: Request) {
     let notFound = products.filter((p) => p.status === 'not_found').map((p) => p.line_id);
     if (notFound.length) {
       const retryLines = lines.filter((l) => notFound.includes(l.line_id));
+      t = Date.now();
       const round2 = await Promise.all(retryLines.map(async (line) => {
         const q = retryQuery(line, 2);
         let cands: any[] = [], error: string | null = null;
         try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
         return { line, q, cands, error };
       }));
-      const r2products = await Promise.all(round2.map(({ line, cands, error }) => matchAndBuild(line, cands, error)));
+      search_ms += Date.now() - t; t = Date.now();
+      const r2products = await Promise.all(round2.map(({ line, cands, error }) => matchAndBuild(line, cands, error).then(withRef)));
+      match_ms += Date.now() - t;
       for (const np of r2products) {
         if (np.status === 'found') {
           const idx = products.findIndex((p) => p.line_id === np.line_id);
@@ -278,13 +295,16 @@ export default async function(req: Request) {
     notFound = products.filter((p) => p.status === 'not_found').map((p) => p.line_id);
     if (notFound.length) {
       const retryLines = lines.filter((l) => notFound.includes(l.line_id));
+      t = Date.now();
       const round3 = await Promise.all(retryLines.map(async (line) => {
         const q = retryQuery(line, 3);
         let cands: any[] = [], error: string | null = null;
         try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
         return { line, q, cands, error };
       }));
-      const r3products = await Promise.all(round3.map(({ line, cands, error }) => matchAndBuild(line, cands, error)));
+      search_ms += Date.now() - t; t = Date.now();
+      const r3products = await Promise.all(round3.map(({ line, cands, error }) => matchAndBuild(line, cands, error).then(withRef)));
+      match_ms += Date.now() - t;
       for (const np of r3products) {
         if (np.status === 'found') {
           const idx = products.findIndex((p) => p.line_id === np.line_id);
@@ -307,9 +327,9 @@ export default async function(req: Request) {
     await setProgress(`${foundCount} of ${total} found, $${totalCost.toFixed(2)}`);
 
     const products_at = new Date().toISOString();
-    await db.entities.Event.update(event_id, { products, products_at, products_source: 'live', product_choices: choices });
+    if (!dry) await db.entities.Event.update(event_id, { products, products_at, products_source: 'live', product_choices: choices });
     await db.entities.CreaoRun.update(run.id, { status: 'completed', completed_at: products_at });
-    return Response.json({ products, products_at, product_choices: choices });
+    return Response.json({ products, products_at, product_choices: choices, timings: { search_ms, match_ms } });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }

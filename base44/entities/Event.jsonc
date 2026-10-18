@@ -215,6 +215,58 @@
         }
       }
     },
+    "prefetch": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "ready",
+            "failed"
+          ]
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "kit_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "theme": {
+          "type": "string"
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "product_choices": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "products_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "timings": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
     "product_choices": {
       "type": "object",
       "additionalProperties": true

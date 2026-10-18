@@ -1,0 +1,37 @@
+{
+  "name": "DesignTiming",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "fresh",
+        "background"
+      ]
+    },
+    "plan_ms": {
+      "type": "number"
+    },
+    "search_ms": {
+      "type": "number"
+    },
+    "match_ms": {
+      "type": "number"
+    },
+    "image_ms": {
+      "type": "number"
+    },
+    "dots_ms": {
+      "type": "number"
+    },
+    "total_ms": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "event_id"
+  ]
+}
