@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import { createMandate, call } from '@/lib/trust';
+import { auraStore } from '@/lib/auraStore';
 
 function Banner({ r }) {
   if (!r) return null;
@@ -26,12 +27,15 @@ export default function TrustCheck({ basket, eventId, capCents }) {
     const r = await call('authorizeBasket', { mandate_id: mandate.id });
     await base44.entities.Basket.update(basket.id, { items: original });
     setRes(r); setBusy('');
+    if (r.status === 401 || r.status === 403) auraStore.set({ checkout: { ...auraStore.get().checkout, blocked: true } });
   };
 
   const agentTamper = async () => {
     setBusy('agent'); setRes(null);
     const r = await call('agentTamperTest', {});
-    setRes({ status: r.data?.merchant_status ?? r.status, data: r.data?.merchant_body || r.data });
+    const status = r.data?.merchant_status ?? r.status;
+    setRes({ status, data: r.data?.merchant_body || r.data });
+    if (status === 401 || status === 403) auraStore.set({ checkout: { ...auraStore.get().checkout, blocked: true } });
     setBusy('');
   };
 

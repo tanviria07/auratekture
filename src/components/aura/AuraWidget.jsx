@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAura } from '@/hooks/use-aura';
+import { auraControl } from '@/lib/auraStore';
 
 // Optional voice concierge, bottom-right. The Studio works fully without it.
 export default function AuraWidget({ context }) {
   const videoRef = useRef(null);
   const a = useAura(videoRef, context);
+  auraControl.start = a.status === 'idle' ? a.start : null;
   const [orb, setOrb] = useState(false);
   useEffect(() => {
     if (a.status === 'idle' || a.hasVideo) { setOrb(false); return; }

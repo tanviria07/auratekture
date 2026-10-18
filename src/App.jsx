@@ -9,7 +9,7 @@ import ScrollToTop from './components/ScrollToTop';
 // Add page imports here
 import SiteLayout from '@/components/SiteLayout';
 import Home from '@/pages/Home';
-import Studio from '@/pages/Studio';
+import StudioRoute from '@/components/StudioRoute';
 import Diagnostics from '@/pages/Diagnostics';
 import Login from '@/pages/Login';
 import AdminGate from '@/components/diagnostics/AdminGate';
@@ -42,7 +42,7 @@ const AuthenticatedApp = () => {
     <Routes>
       <Route element={<SiteLayout />}>
         <Route path="/" element={<Home />} />
-        <Route path="/studio" element={<Studio />} />
+        <Route path="/studio" element={<StudioRoute />} />
         <Route path="/diagnostics" element={<AdminGate><Diagnostics /></AdminGate>} />
       </Route>
       <Route path="/login" element={<Login />} />

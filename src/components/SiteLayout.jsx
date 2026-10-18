@@ -1,4 +1,5 @@
 import { Link, Outlet } from 'react-router-dom';
+import AuraLayer from '@/components/aura/AuraLayer';
 
 export default function SiteLayout() {
   return (
@@ -11,6 +12,7 @@ export default function SiteLayout() {
         <span>© Auratekture</span>
         <Link to="/diagnostics" className="hover:text-primary transition-colors">Diagnostics</Link>
       </footer>
+      <AuraLayer />
     </div>
   );
 }

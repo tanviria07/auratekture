@@ -1,27 +1,45 @@
 import { useEffect, useRef } from 'react';
-import { VENUE_OPTIONS } from '@/lib/categories';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { getVisitorId } from '@/lib/visitor';
+import { studioBridge } from '@/lib/auraStore';
 
-// window.SITE: same actions as the Studio controls. Nothing here signs or pays.
-export function useSiteBridge(api) {
+// Studio registers its actions; calls made before the Studio is mounted are queued.
+export function useStudioActions(api) {
   const ref = useRef(api); ref.current = api;
   useEffect(() => {
-    const a = () => ref.current;
+    studioBridge.actions = ref;
+    const q = studioBridge.pending.splice(0);
+    setTimeout(() => q.forEach(([n, args]) => ref.current[n]?.(args)), 300);
+    return () => { if (studioBridge.actions === ref) studioBridge.actions = null; };
+  }, []);
+}
+
+// window.SITE: same actions as tapping the UI. Nothing here signs or pays.
+export function useGlobalSite(rooms) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const roomsRef = useRef(rooms); roomsRef.current = rooms;
+  useEffect(() => {
+    const studio = (name) => (args = {}) => {
+      if (studioBridge.actions) return studioBridge.actions.current[name]?.(args);
+      studioBridge.pending.push([name, args]);
+      navigate('/studio');
+    };
+    const go = (id, then) => { if (then) studioBridge.pending.push([then, {}]); navigate(`/studio?event=${id}`); };
     window.SITE = {
-      set_room: ({ purpose, ceiling_ft, people, budget, needed_by } = {}) => {
-        const m = { room_purpose: purpose, ceiling_ft, headcount: people, budget, deadline: needed_by };
-        a().setRoom(Object.fromEntries(Object.entries(m).filter(([, v]) => v !== undefined)));
+      new_room: async () => {
+        const ev = await base44.entities.Event.create({ name: 'New room', visitor_id: getVisitorId(), status: 'draft', width_ft: 20, depth_ft: 16, ceiling_ft: 10 });
+        qc.invalidateQueries({ queryKey: ['events'] });
+        go(ev.id, 'request_photo');
       },
-      mark_already_here: ({ item } = {}) => {
-        if (!item) return;
-        const v = a().venue || {}, options = v.options || [];
-        const hit = VENUE_OPTIONS.find((o) => o.toLowerCase() === String(item).toLowerCase());
-        if (hit) { if (!options.includes(hit)) a().setVenue({ ...v, options: [...options, hit] }); }
-        else a().setVenue({ options, other: [v.other, item].filter(Boolean).join(', ') });
+      open_room: ({ name } = {}) => {
+        const q = String(name || '').toLowerCase().trim();
+        const r = q && (roomsRef.current || []).find((x) => x.name?.toLowerCase().includes(q));
+        if (r) go(r.id);
       },
-      design_room: () => a().design(),
-      focus_product: ({ number } = {}) => a().focus(Number(number)),
-      swap_product: ({ number, alternative } = {}) => { if ([1, 2].includes(Number(alternative))) a().swapN(Number(number), Number(alternative)); },
-      open_checkout: () => a().openCheckout(),
+      ...Object.fromEntries(['request_photo', 'update_image', 'set_room', 'mark_already_here', 'design_room', 'focus_product', 'swap_product', 'open_checkout'].map((n) => [n, studio(n)])),
     };
     return () => { delete window.SITE; };
   }, []);

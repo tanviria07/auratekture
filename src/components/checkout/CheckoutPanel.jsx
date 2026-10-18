@@ -8,6 +8,7 @@ import { base44 } from '@/api/base44Client';
 import { createMandate, call } from '@/lib/trust';
 import BasketGroups from './BasketGroups';
 import Receipt from './Receipt';
+import { auraStore } from '@/lib/auraStore';
 import TrustCheck from './TrustCheck';
 
 export default function CheckoutPanel({ eventId, budget }) {
@@ -27,7 +28,13 @@ export default function CheckoutPanel({ eventId, budget }) {
     setBusy(true); setError(null); setReceipt(null);
     const mandate = await createMandate(eventId, basket.items, capCents);
     const r = await call('authorizeBasket', { mandate_id: mandate.id });
-    if (r.status === 200) setReceipt(r.data); else setError(r);
+    if (r.status === 200) {
+      setReceipt(r.data);
+      auraStore.set({ checkout: { paid: true, receipt_total: r.data.authorizations.reduce((s, a) => s + a.amount_cents, 0) / 100 } });
+    } else {
+      setError(r);
+      if (r.status === 401 || r.status === 403) auraStore.set({ checkout: { blocked: true } });
+    }
     setBusy(false);
   };
 
@@ -42,7 +49,7 @@ export default function CheckoutPanel({ eventId, budget }) {
         <Label>Spending cap ($)</Label>
         <Input type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />
       </div>
-      <Button className="w-full rounded-full" onClick={approve} disabled={busy || !capCents}>
+      <Button className={`w-full rounded-full ${!receipt && !busy && capCents ? 'ring-4 ring-primary/40 shadow-[0_0_24px_hsl(var(--primary))] animate-pulse' : ''}`} onClick={approve} disabled={busy || !capCents}>
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}Approve and sign
       </Button>
       {error && <div className="rounded-lg p-3 text-sm bg-destructive text-destructive-foreground"><b>{error.status} {error.data?.error}</b>{error.data?.reason && ` — ${error.data.reason}`}</div>}

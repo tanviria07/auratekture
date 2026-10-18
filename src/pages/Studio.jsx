@@ -24,9 +24,10 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { numberKit } from '@/lib/numbering';
-import { auraContext } from '@/lib/auraContext';
-import { useSiteBridge } from '@/hooks/use-site-bridge';
-import AuraWidget from '@/components/aura/AuraWidget';
+import { studioContext } from '@/lib/auraContext';
+import { useStudioActions } from '@/hooks/use-site-bridge';
+import { auraStore } from '@/lib/auraStore';
+import { VENUE_OPTIONS } from '@/lib/categories';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
 
@@ -41,6 +42,7 @@ export default function Studio() {
   const [progress, setProgress] = useState('');
   const [updating, setUpdating] = useState(false);
   const [limitBlock, setLimitBlock] = useState(null);
+  const [imageUpdated, setImageUpdated] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -79,6 +81,7 @@ export default function Studio() {
 
   const refreshBasket = async (k) => { await syncBasket(eventId, k); qc.invalidateQueries({ queryKey: ['basket', eventId] }); };
   const swap = async (line_id, i) => {
+    setImageUpdated(false);
     const product_choices = { ...(facts.product_choices || {}), [line_id]: i };
     await patch({ product_choices });
     await refreshBasket(buildKit(kitLines, facts.products, product_choices));
@@ -99,6 +102,7 @@ export default function Studio() {
   };
 
   const onPhoto = async (photo_url) => {
+    auraStore.set({ photoGlow: false });
     setFacts((f) => ({ ...f, photo_url }));
     factsRef.current = { ...factsRef.current, photo_url };
     const id = await save();
@@ -111,7 +115,7 @@ export default function Studio() {
     const limit = await invoke('checkDesignLimit', { event_id: id });
     if (limit.error) { toast({ title: 'Could not start', description: limit.error, variant: 'destructive' }); return; }
     if (!limit.allowed) { setLimitBlock(limit); return; }
-    setLimitBlock(null);
+    setLimitBlock(null); setImageUpdated(false);
     let lines = [];
     await design.run({
       kit: async () => { const r = await invoke('proposeKit', { event_id: id }); if (!r.error) { lines = r.kit_lines; setFacts((f) => ({ ...f, kit_lines: lines, products: [], product_choices: {}, theme: r.theme })); } return r; },
@@ -131,7 +135,7 @@ export default function Studio() {
     setUpdating(true);
     const r = await invoke('generateRoomPreview', { event_id: eventId, retry: true });
     if (r.error) toast({ title: 'Could not update the image', description: r.error, variant: 'destructive' });
-    else setFacts((f) => ({ ...f, previews: r.previews }));
+    else { setFacts((f) => ({ ...f, previews: r.previews })); setImageUpdated(true); }
     setUpdating(false);
   };
 
@@ -172,16 +176,30 @@ export default function Studio() {
   const numbered = numberKit(chosen, facts.previews?.[0]);
   const [focus, setFocus] = useState(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  useSiteBridge({
-    venue: facts.venue_supplied,
-    setVenue: (v) => patch({ venue_supplied: v }),
-    setRoom: async (data) => { setFacts((f) => ({ ...f, ...data })); factsRef.current = { ...factsRef.current, ...data }; await save(); },
-    design: () => { if (facts.photo_url && !design.busy && !limitBlock) runDesign(); },
-    focus: (n) => { const x = numbered.find((i) => i.n === n); if (x) setFocus({ line_id: x.line.line_id, t: Date.now() }); },
-    swapN: (n, alt) => { const x = numbered.find((i) => i.n === n); if (x && x.line.alternatives?.[alt - 1]) swap(x.line.line_id, alt); },
-    openCheckout: () => { if (chosen.length) setCheckoutOpen(true); },
+  useStudioActions({
+    set_room: async ({ purpose, ceiling_ft, people, budget, needed_by } = {}) => {
+      const m = { room_purpose: purpose, ceiling_ft, headcount: people, budget, deadline: needed_by };
+      const data = Object.fromEntries(Object.entries(m).filter(([, v]) => v !== undefined));
+      setFacts((f) => ({ ...f, ...data })); factsRef.current = { ...factsRef.current, ...data }; await save();
+    },
+    mark_already_here: ({ item } = {}) => {
+      if (!item) return;
+      const v = facts.venue_supplied || {}, options = v.options || [];
+      const hit = VENUE_OPTIONS.find((o) => o.toLowerCase() === String(item).toLowerCase());
+      if (hit) { if (!options.includes(hit)) patch({ venue_supplied: { ...v, options: [...options, hit] } }); }
+      else patch({ venue_supplied: { options, other: [v.other, item].filter(Boolean).join(', ') } });
+    },
+    request_photo: () => { document.getElementById('photo-upload')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); auraStore.set({ photoGlow: true }); },
+    design_room: () => { if (facts.photo_url && !design.busy && !limitBlock) runDesign(); },
+    update_image: () => { if (chosen.length && !updating) updateImage(); },
+    focus_product: ({ number } = {}) => { const x = numbered.find((i) => i.n === Number(number)); if (x) setFocus({ line_id: x.line.line_id, t: Date.now() }); },
+    swap_product: ({ number, alternative } = {}) => { const alt = Number(alternative); const x = numbered.find((i) => i.n === Number(number)); if ([1, 2].includes(alt) && x?.line.alternatives?.[alt - 1]) swap(x.line.line_id, alt); },
+    open_checkout: () => { if (chosen.length) setCheckoutOpen(true); },
   });
-  const auraCtx = auraContext({ facts, design, numbered, chosen, venue: facts.venue_supplied });
+  const auraCtx = studioContext({ facts, design, numbered, chosen, analyzing, chips, imageUpdated, checkoutOpen });
+  const ctxKey = JSON.stringify(auraCtx);
+  useEffect(() => { auraStore.set({ studio: auraCtx }); }, [ctxKey]);
+  useEffect(() => { auraStore.set({ checkout: {} }); return () => auraStore.set({ studio: null, checkout: {}, photoGlow: false }); }, []);
   return (
     <div className="max-w-7xl mx-auto px-gutter pb-16 space-y-10">
       <h1 className="text-3xl">{facts.name}</h1>
@@ -193,7 +211,7 @@ export default function Studio() {
       <section className="grid lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-4">
           <RoomPhoto uri={facts.photo_url} />
-          <PhotoUpload hasPhoto={!!facts.photo_url} onUploaded={onPhoto} />
+          <div id="photo-upload"><PhotoUpload hasPhoto={!!facts.photo_url} onUploaded={onPhoto} /></div>
           {loaded && facts.photo_url && <RoomContents items={chips} onChange={(items) => patch({ existing_items: items })} />}
           {loaded && facts.photo_url && <AlreadyProvided value={facts.venue_supplied} onChange={(v) => patch({ venue_supplied: v })} />}
           <PhotoAnalysis analysis={facts.photo_analysis} palette={facts.color_palette} analyzing={analyzing} error={analysisError} onRetry={() => analyze(eventId)} />
@@ -225,7 +243,6 @@ export default function Studio() {
           <ShoppingList kit={chosen} eventId={eventId} budget={budget} open={checkoutOpen} onOpenChange={setCheckoutOpen} />
         </section>
       )}
-      <AuraWidget context={auraCtx} />
     </div>
   );
 }

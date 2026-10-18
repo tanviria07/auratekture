@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Upload, Loader2 } from 'lucide-react';
+import { Upload, Loader2, Mic } from 'lucide-react';
+import { auraControl } from '@/lib/auraStore';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import YourRooms from '@/components/home/YourRooms';
@@ -26,9 +27,14 @@ export default function Home() {
       <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="py-section max-w-3xl">
         <p className="text-sm uppercase tracking-[0.2em] text-primary mb-6">Room to ready</p>
         <h1 className="text-5xl md:text-7xl font-normal leading-[1.05]">Turn a photo into your event plan.</h1>
-        <Button size="lg" className="rounded-full px-7 mt-10" onClick={() => fileRef.current?.click()} disabled={uploading}>
-          {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}Plan a new room
-        </Button>
+        <div className="flex flex-wrap gap-3 mt-10">
+          <Button size="lg" className="rounded-full px-7" onClick={() => fileRef.current?.click()} disabled={uploading}>
+            {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}Plan a new room
+          </Button>
+          <Button size="lg" variant="outline" className="rounded-full px-7 border-primary text-primary" onClick={() => auraControl.start?.()}>
+            <Mic className="w-4 h-4 mr-2" />Talk to Aura
+          </Button>
+        </div>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
       </motion.section>
       <YourRooms />
