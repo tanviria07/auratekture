@@ -80,6 +80,22 @@ The app is built and hosted on [Base44](https://base44.com). Its backend functio
 - `VISA_SECRET_KEY`
 - `AGENT_SIGNING_PRIVATE_KEY`
 
+## Built on Base44
+
+The whole Auratekture app runs on Base44, and Base44's AI builder wrote its code from my prompts:
+
+- **Pages and UI:** Home, Studio, checkout, Trust check and Diagnostics.
+- **Backend functions:** photo analysis, planning, product search, the room image, the numbered dots, the signed checkout, the store-side checks and the Visa sandbox calls.
+- **Data:** rooms, designs, payments, approvals and usage limits, all stored as Base44 entities.
+- **Accounts and roles:** visitors get their own rooms and limits; Diagnostics is admin-only.
+- **Secrets:** every API key lives in Base44 Secrets.
+- **Hosting:** published at auratekture.base44.app, with two-way sync to this GitHub repo.
+
+Two things live outside Base44:
+
+- **The Aura voice worker** ([auratekture-aura](https://github.com/tanviria07/auratekture-aura)): a small Python process for LiveKit and Synthesia. A voice session has to stay connected for the whole conversation, and Base44 functions are short requests, so it runs separately and talks to the app through LiveKit.
+- **Repo housekeeping:** this README, the page metadata and the config file labels were edited with Claude in Cursor, which is why Claude appears as a contributor.
+
 ## Built with
 
 Base44 · Gemini · SerpApi · Visa Acceptance · LiveKit · Synthesia
