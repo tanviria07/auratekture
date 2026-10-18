@@ -1,15 +1,22 @@
 import { Check, Loader2, Sparkles, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { STEPS } from '@/hooks/use-design-run';
 
-export default function DesignPanel({ steps, busy, error, progress, disabled, onRun }) {
+export default function DesignPanel({ steps, busy, error, progress, disabled, onRun, block }) {
   const started = Object.keys(steps).length > 0;
   return (
     <div className="rounded-2xl border bg-card p-6 space-y-4">
-      <Button size="lg" className="rounded-full px-8" disabled={busy || disabled} onClick={onRun}>
+      <Button size="lg" className="rounded-full px-8" disabled={busy || disabled || !!block} onClick={onRun}>
         {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}Design my room
       </Button>
-      {disabled && <p className="text-sm text-muted-foreground">Add a photo of your room first.</p>}
+      {disabled && !block && <p className="text-sm text-muted-foreground">Add a photo of your room first.</p>}
+      {block && !busy && (
+        <div className="rounded-xl bg-accent/50 p-4 space-y-2">
+          <p className="text-sm text-accent-foreground">{block.message}</p>
+          <Link to="/login" className="text-sm font-medium text-primary hover:underline">Log in for unlimited runs</Link>
+        </div>
+      )}
       {started && (
         <ol className="space-y-2">
           {STEPS.map(([key, label], i) => {

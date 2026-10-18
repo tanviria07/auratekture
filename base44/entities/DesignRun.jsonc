@@ -1,0 +1,19 @@
+{
+  "name": "DesignRun",
+  "type": "object",
+  "properties": {
+    "visitor_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "by_admin": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "visitor_id"
+  ]
+}

@@ -31,9 +31,7 @@ export default function RoomPreview({ photoUrl, previews, choices, kit, onSwap, 
       ) : <div className="aspect-[4/3] rounded-2xl bg-muted animate-pulse" />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">AI preview of your room — illustrative. Products and prices are real; check final placement yourself.</p>
-        {(stale || updating) && (
-          <Button className="rounded-full" disabled={updating} onClick={onUpdate}>{updating ? <Loader2 className="animate-spin" /> : <RefreshCw />}Update image</Button>
-        )}
+        <Button className="rounded-full" disabled={updating} onClick={onUpdate}>{updating ? <Loader2 className="animate-spin" /> : <RefreshCw />}{stale ? 'Update image' : 'Retry image'}</Button>
       </div>
       <NumberLegend items={numbered} onSwap={onSwap} activeId={activeId} onHover={setActiveId} />
     </section>

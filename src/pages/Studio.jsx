@@ -20,6 +20,8 @@ import SafetyChecks from '@/components/studio/SafetyChecks';
 import ShoppingList from '@/components/studio/ShoppingList';
 import RoomPreview from '@/components/preview/RoomPreview';
 import DemoRunBar from '@/components/studio/DemoRunBar';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
@@ -34,6 +36,7 @@ export default function Studio() {
   const [analysisError, setAnalysisError] = useState('');
   const [progress, setProgress] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [limitBlock, setLimitBlock] = useState(null);
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -101,6 +104,10 @@ export default function Studio() {
 
   const runDesign = async () => {
     const id = await save();
+    const limit = await invoke('checkDesignLimit', { event_id: id });
+    if (limit.error) { toast({ title: 'Could not start', description: limit.error, variant: 'destructive' }); return; }
+    if (!limit.allowed) { setLimitBlock(limit); return; }
+    setLimitBlock(null);
     let lines = [];
     await design.run({
       kit: async () => { const r = await invoke('proposeKit', { event_id: id }); if (!r.error) { lines = r.kit_lines; setFacts((f) => ({ ...f, kit_lines: lines, products: [], product_choices: {}, theme: r.theme })); } return r; },
@@ -177,13 +184,22 @@ export default function Studio() {
         <div className="space-y-6">
           <h2 className="text-xl">Your room</h2>
           <RoomFactsForm facts={facts} onChange={(k, v) => setFacts((f) => ({ ...f, [k]: v }))} onSave={async () => { await save(); toast({ title: 'Saved' }); }} saving={saving} saved={!!eventId} />
-          <DesignPanel {...design} progress={progress} disabled={!facts.photo_url} onRun={runDesign} />
+          <DesignPanel {...design} progress={progress} disabled={!facts.photo_url} onRun={runDesign} block={limitBlock} />
         </div>
       </section>
 
       {loaded && (
         <RoomPreview photoUrl={facts.photo_url} previews={facts.previews} choices={facts.product_choices} kit={chosen}
           onSwap={swap} onUpdate={updateImage} updating={updating} theme={facts.theme} />
+      )}
+
+      {chosen.length > 0 && !facts.previews?.length && (
+        <section className="rounded-2xl border bg-card p-6 space-y-3">
+          <p className="text-sm text-muted-foreground">The room image didn't generate. Retry with the products already found, no new search needed.</p>
+          <Button variant="outline" onClick={updateImage} disabled={updating}>
+            {updating ? <Loader2 className="animate-spin" /> : <RefreshCw />}Retry image
+          </Button>
+        </section>
       )}
 
       {chosen.length > 0 && (

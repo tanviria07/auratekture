@@ -96,11 +96,6 @@ export default async function(req: Request) {
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
 
     const by_admin = !!(await getAdmin(base44));
-    if (!by_admin) {
-      const since = new Date(Date.now() - 3600_000).toISOString();
-      const recent = await db.entities.CreaoRun.count({ by_admin: { $ne: true }, created_date: { $gte: since } });
-      if (recent >= 3) return Response.json({ error: 'Previews are busy, try again in a few minutes' }, { status: 429 });
-    }
 
     const ev = await db.entities.Event.get(event_id);
     if (!ev.photo_url) return Response.json({ error: 'This room has no photo' }, { status: 400 });

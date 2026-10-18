@@ -39,6 +39,42 @@ Fill specs (width_in, depth_in, height_in, watts, length_ft) from the listing te
 Copy the exact listing text you used into raw_spec_quote. Set indoor_rated from the listing text: "yes" if indoor/interior rated, "no" if outdoor only, "not stated" if it does not say.
 If no candidate fits even at 1.5x the guide price, set status "not_found" and explain in reason; otherwise give a one-sentence reason.`;
 
+// Category-specific exclusion words: the picked product must BE the item, not a part or accessory.
+const EXCLUDE_ALWAYS: Record<string, string[]> = {
+  christmas_tree: ['tips', 'tip', 'picks', 'pick', 'branches', 'branch', 'topper', 'skirt', 'ornament', 'ornaments', 'storage', 'bag', 'bags', 'replacement'],
+  string_lights: ['clips', 'clip', 'hooks', 'hook', 'extension cord', 'extension cords'],
+  stockings: ['holder', 'holders', 'hanger', 'hangers', 'hook', 'hooks', 'stand', 'stands'],
+};
+// Weak exclusions: only exclude if the title doesn't clearly describe the item itself.
+const EXCLUDE_WEAK: Record<string, string[]> = {
+  christmas_tree: ['stand', 'collar'],
+  string_lights: ['timer', 'timers'],
+};
+const STRING_LIGHT_RE = /string\s*light|fairy\s*light|mini\s*light|led\s*light|icicle\s*light|rope\s*light|christmas\s*light/;
+
+function hasHeightInFt(title: string): boolean {
+  return /\d+(\.\d+)?\s*(ft|ft\.|feet|foot)\b/i.test(title) || /\d+'\b/i.test(title);
+}
+function isWholeTree(title: string): boolean {
+  const t = title.toLowerCase();
+  return (t.includes('artificial tree') || t.includes('pencil tree') || t.includes('flocked tree') || t.includes('pre-lit tree'))
+    && !t.includes('skirt') && !t.includes('topper');
+}
+function validateCandidate(category: string, title: string): boolean {
+  const t = title.toLowerCase();
+  const always = EXCLUDE_ALWAYS[category];
+  if (always && always.some((w) => t.includes(w))) return false;
+  const weak = EXCLUDE_WEAK[category];
+  if (weak && weak.some((w) => t.includes(w))) {
+    if (category === 'christmas_tree' && t.includes('tree') && hasHeightInFt(title)) return true;
+    if (category === 'string_lights' && STRING_LIGHT_RE.test(t)) return true;
+    return false;
+  }
+  if (category === 'christmas_tree' && !hasHeightInFt(title)) return false;
+  if ((category === 'tree_skirt' || category === 'tree_topper') && isWholeTree(title)) return false;
+  return true;
+}
+
 function toProduct(pick: any, cands: any[], qty: number) {
   const c = cands[pick?.candidate_index];
   if (!c || pick.link !== c.link || Number(pick.price) !== c.price) return null;
@@ -84,6 +120,26 @@ async function matchLine(line: any, cands: any[]) {
   }
 }
 
+// Match one line, then validate the pick in code. If excluded, re-match with only valid candidates.
+async function matchAndBuild(line: any, cands: any[], error: string | null) {
+  if (error || !cands.length) return buildProduct(line, cands, null, error);
+  let ans = await matchLine(line, cands);
+  let effectiveCands = cands;
+  if (ans.status === 'found' && ans.pick != null) {
+    const pickedCand = cands[ans.pick.candidate_index];
+    if (pickedCand && !validateCandidate(line.category, pickedCand.title)) {
+      const validCands = cands.filter((c) => validateCandidate(line.category, c.title));
+      if (validCands.length) {
+        effectiveCands = validCands;
+        ans = await matchLine(line, validCands);
+      } else {
+        ans = { line_id: line.line_id, status: 'not_found', reason: 'Only parts and accessories found, not the item itself.' };
+      }
+    }
+  }
+  return buildProduct(line, effectiveCands, ans, null);
+}
+
 // Build a product result from a match answer.
 function buildProduct(line: any, cands: any[], ans: any, error: string | null) {
   const qty = line.qty || 1;
@@ -95,7 +151,8 @@ function buildProduct(line: any, cands: any[], ans: any, error: string | null) {
   }
   const seen = new Set([main.product_url]);
   const alternatives = (ans.alternatives || []).map((a) => toProduct(a, cands, qty))
-    .filter((a) => a && !seen.has(a.product_url) && seen.add(a.product_url)).slice(0, 2);
+    .filter((a) => a && validateCandidate(line.category, a.title))
+    .filter((a) => !seen.has(a.product_url) && seen.add(a.product_url)).slice(0, 2);
   return { line_id: line.line_id, status: 'found', reason: ans.reason, ...main, alternatives };
 }
 
@@ -166,13 +223,17 @@ export default async function(req: Request) {
     if (!event_id) return Response.json({ error: 'event_id required' }, { status: 400 });
 
     const by_admin = !!(await getAdmin(base44));
-    if (!by_admin) {
-      const since = new Date(Date.now() - 3600_000).toISOString();
-      const recent = await db.entities.CreaoRun.count({ by_admin: { $ne: true }, created_date: { $gte: since } });
-      if (recent >= 3) return Response.json({ error: 'Product search is busy, try again in a few minutes' }, { status: 429 });
-    }
 
     const ev = await db.entities.Event.get(event_id);
+    if (!by_admin) {
+      const since = new Date(Date.now() - 3600_000).toISOString();
+      if (ev.visitor_id) {
+        const visitorRuns = await db.entities.DesignRun.count({ visitor_id: ev.visitor_id, created_date: { $gte: since } });
+        if (visitorRuns >= 3) return Response.json({ error: "You've used all 3 runs this hour. Try again later or log in for unlimited runs." }, { status: 429 });
+      }
+      const globalRuns = await db.entities.DesignRun.count({ by_admin: { $ne: true }, created_date: { $gte: since } });
+      if (globalRuns >= 15) return Response.json({ error: 'Our service is busy right now. Try again in a few minutes.' }, { status: 429 });
+    }
     const lines = (await loadKitLines(db, ev)).filter((l) => l.enabled !== false);
     if (!lines.length) return Response.json({ error: 'Add a kit first' }, { status: 400 });
 
@@ -187,8 +248,7 @@ export default async function(req: Request) {
       try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
       return { line, q, cands, error };
     }));
-    const picks1 = await Promise.all(round1.map(({ line, cands }) => matchLine(line, cands)));
-    let products = round1.map(({ line, q, cands, error }, i) => buildProduct(line, cands, picks1[i], error));
+    let products = await Promise.all(round1.map(({ line, cands, error }) => matchAndBuild(line, cands, error)));
 
     let foundCount = products.filter((p) => p.status === 'found').length;
     await setProgress(`${foundCount} of ${total} found`);
@@ -203,8 +263,7 @@ export default async function(req: Request) {
         try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
         return { line, q, cands, error };
       }));
-      const picks2 = await Promise.all(round2.map(({ line, cands }) => matchLine(line, cands)));
-      const r2products = round2.map(({ line, cands, error }, i) => buildProduct(line, cands, picks2[i], error));
+      const r2products = await Promise.all(round2.map(({ line, cands, error }) => matchAndBuild(line, cands, error)));
       for (const np of r2products) {
         if (np.status === 'found') {
           const idx = products.findIndex((p) => p.line_id === np.line_id);
@@ -225,8 +284,7 @@ export default async function(req: Request) {
         try { cands = await cachedSearch(db, q); } catch (e: any) { error = e.message; }
         return { line, q, cands, error };
       }));
-      const picks3 = await Promise.all(round3.map(({ line, cands }) => matchLine(line, cands)));
-      const r3products = round3.map(({ line, cands, error }, i) => buildProduct(line, cands, picks3[i], error));
+      const r3products = await Promise.all(round3.map(({ line, cands, error }) => matchAndBuild(line, cands, error)));
       for (const np of r3products) {
         if (np.status === 'found') {
           const idx = products.findIndex((p) => p.line_id === np.line_id);
