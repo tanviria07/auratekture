@@ -50,6 +50,7 @@ export const call = (name, payload) => base44.functions.invoke(name, payload)
 export const BLOCKS = {
   '403 MANDATE_TAMPER_BLOCKED': 'Blocked: the price changed after you signed.',
   '401 AGENT_SIGNATURE_INVALID': 'Blocked: the checkout request was altered after the agent signed it.',
+  '401 NONCE_REPLAYED': 'Blocked: this exact request was already used.',
 };
 export const blockOf = (r) => BLOCKS[`${r?.status} ${r?.data?.error}`] || null;
 

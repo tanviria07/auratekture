@@ -6,7 +6,7 @@ import { auraStore } from '@/lib/auraStore';
 import { getVisitorId } from '@/lib/visitor';
 import TrustResult from './TrustResult';
 
-const NAMES = { price: 'price_changed_after_signing', agent: 'checkout_signature_tampered' };
+const NAMES = { price: 'price_changed_after_signing', agent: 'checkout_signature_tampered', replay: 'old_request_replayed' };
 
 const report = (kind, r) => {
   const meaning = blockOf(r);
@@ -38,8 +38,9 @@ export default function TrustCheck({ basket, eventId, capCents }) {
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('price')}>{busy === 'price' && <Loader2 className="w-3 h-3 animate-spin" />}Change a price after signing (+$50)</Button>
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('agent')}>{busy === 'agent' && <Loader2 className="w-3 h-3 animate-spin" />}Tamper with the checkout signature</Button>
+        <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('replay')}>{busy === 'replay' && <Loader2 className="w-3 h-3 animate-spin" />}Replay an old payment request</Button>
       </div>
-      {['price', 'agent'].map((k) => <TrustResult key={k} r={res[k]} onRetry={() => run(k)} />)}
+      {['price', 'agent', 'replay'].map((k) => <TrustResult key={k} r={res[k]} onRetry={() => run(k)} />)}
     </div>
   );
 }

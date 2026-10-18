@@ -1,0 +1,15 @@
+{
+  "name": "AgentNonce",
+  "type": "object",
+  "properties": {
+    "nonce": {
+      "type": "string"
+    },
+    "keyid": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "nonce"
+  ]
+}

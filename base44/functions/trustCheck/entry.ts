@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.52';
 import { checkMandate } from '../../shared/mandate.ts';
-import { getAgentKeys, signedAgentFetch } from '../../shared/agentSig.ts';
+import { getAgentKeys, signedAgentFetch, sendSigned, MAX_WINDOW_S } from '../../shared/agentSig.ts';
 import { storeTotals } from '../../shared/canonical.ts';
 
 const fail = (status, error, reason) => Response.json({ error, reason }, { status });
@@ -13,7 +13,7 @@ export default async function(req) {
     const base44 = createClientFromRequest(req);
     const db = base44.asServiceRole;
     const { kind, event_id, visitor_id, mandate_id } = await req.json();
-    if (!['price', 'agent'].includes(kind) || !event_id || !visitor_id) return fail(400, 'BAD_REQUEST', 'Missing details for this check');
+    if (!['price', 'agent', 'replay'].includes(kind) || !event_id || !visitor_id) return fail(400, 'BAD_REQUEST', 'Missing details for this check');
 
     let user = null;
     try { user = await base44.auth.me(); } catch { user = null; }
@@ -39,8 +39,17 @@ export default async function(req) {
       return fail(500, 'NOT_BLOCKED', 'The change was not caught');
     }
 
-    const keys = await getAgentKeys();
     const origin = req.headers.get('X-Base44-App-Url') || new URL(req.url).origin;
+    if (kind === 'replay') {
+      // Resend the last signed request exactly as it was sent.
+      const { items: auths } = await db.entities.Authorization.filter({ mandate_id: last.id }, { sort: '-created_date', limit: 20 });
+      const prev = auths.find((a) => a.signed_request?.signature);
+      if (!prev) return fail(409, 'NO_CHECKOUT', 'Run a new checkout first, then try again');
+      if (Date.now() / 1000 - prev.signed_request.created > MAX_WINDOW_S) return fail(409, 'REPLAY_TOO_OLD', 'The last signed request is over 8 minutes old. Run a new checkout, then try again');
+      const v = await sendSigned(origin, prev.signed_request);
+      return Response.json(v.body, { status: v.status === 200 ? 500 : v.status });
+    }
+    const keys = await getAgentKeys();
     const [store, amount_cents] = Object.entries(storeTotals(basket.items))[0];
     const v = await signedAgentFetch(origin, keys, { mandate_id: last.id, store, amount_cents }, true);
     return Response.json(v.body, { status: v.status === 200 ? 500 : v.status });

@@ -13,7 +13,7 @@ export function safetyChecks(kit, ceilingFt) {
     const max = (ceiling - 1) * 12, h = tree.product.specs?.height_in;
     out.push(h == null
       ? { ok: null, label: `Tree height not listed — keep it at most ${ceiling - 1} ft` }
-      : { ok: h <= max, label: `Tree ${+(h / 12).toFixed(1)} ft, limit ${ceiling - 1} ft (ceiling minus 1 ft)`, note: tree.product.specs?.confidence?.height_in === 'quoted' ? null : 'estimated' });
+      : { ok: h <= max, label: `Tree ${+(h / 12).toFixed(1)} ft, limit ${ceiling - 1} ft (ceiling minus 1 ft)`, note: tree.product.specs?.confidence?.height_in === 'quoted' ? 'from the listing' : 'estimated' });
   }
 
   const lights = items.filter((l) => l.category === 'string_lights');
@@ -30,7 +30,7 @@ export function safetyChecks(kit, ceilingFt) {
   if (powered.length) {
     let w = 0, est = false;
     for (const l of powered) { const v = l.product.specs?.watts; if (v == null) est = true; w += (v ?? POWERED[l.category]) * (l.qty || 1); }
-    out.push({ ok: w <= 1440, label: `${Math.round(w)} W of 1,440 W on one 15 A circuit`, note: est ? 'estimated' : null });
+    out.push({ ok: w <= 1440, label: `${Math.round(w)} W of 1,440 W on one 15 A circuit`, note: est ? 'estimated' : 'from the listing' });
   }
 
   const flames = items.filter((l) => FLAME.test(l.product.title) && !SAFE_FLAME.test(l.product.title));

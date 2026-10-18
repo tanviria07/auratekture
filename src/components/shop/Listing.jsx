@@ -16,7 +16,7 @@ export default function Listing({ line }) {
           <p className="text-sm">${p.unit_price_usd} × {qty} = <b>${(p.unit_price_usd * qty).toFixed(2)}</b></p>
         </div>
       </div>
-      {p.delivery && <p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Truck className="w-3 h-3" />{p.delivery}</p>}
+<p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Truck className="w-3 h-3" />{p.delivery ? `${p.delivery} · from the listing` : 'Delivery: not listed'}</p>
       {(over || missing.length > 0) && (
         <div className="text-xs rounded-lg bg-accent text-accent-foreground p-2 space-y-0.5">
           {over && <p className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Over the ${line.max_unit_price_usd} per-item budget</p>}

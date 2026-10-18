@@ -60,6 +60,8 @@ export default async function(req) {
       } else {
         patch = { status: 'SIMULATED', transaction_id: 'sim_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16), response_summary: 'Simulated: Visa secrets not set' };
       }
+      patch.verifier_steps = v.body?.steps || [];
+      patch.signed_request = v.request;
       rec = await base44.asServiceRole.entities.Authorization.update(rec.id, patch);
       return rec;
     }));

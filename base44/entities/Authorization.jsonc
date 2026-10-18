@@ -26,6 +26,46 @@
     },
     "response_summary": {
       "type": "string"
+    },
+    "verifier_steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "signed_request": {
+      "type": "object",
+      "properties": {
+        "signature_input": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "content_digest": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "created": {
+          "type": "number"
+        }
+      }
     }
   },
   "required": [

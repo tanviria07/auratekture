@@ -4,6 +4,8 @@ const BADGE = {
   missing: 'bg-muted text-muted-foreground',
 };
 
+const LABEL = { quoted: 'from the listing', estimated: 'estimated', missing: 'not listed' };
+
 // A spec value may be plain or {value, status|source}.
 const read = (v, src) => {
   const value = v && typeof v === 'object' && !Array.isArray(v) ? v.value : v;
@@ -23,7 +25,7 @@ export default function SpecList({ specs, sources = {} }) {
             <span className="text-muted-foreground">{k.replace(/_/g, ' ')}</span>
             <span className="flex items-center gap-1.5">
               <span>{value == null ? '—' : String(value)}</span>
-              <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${BADGE[status]}`}>{status}</span>
+              <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${BADGE[status]}`}>{LABEL[status]}</span>
             </span>
           </li>
         );

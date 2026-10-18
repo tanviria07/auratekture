@@ -10,8 +10,9 @@ import BasketGroups from './BasketGroups';
 import Receipt from './Receipt';
 import { auraStore } from '@/lib/auraStore';
 import TrustCheck from './TrustCheck';
+import SignSummary from './SignSummary';
 
-export default function CheckoutPanel({ eventId, budget }) {
+export default function CheckoutPanel({ eventId, budget, lines, neededBy }) {
   const qc = useQueryClient();
   const { data: basket, isLoading } = useQuery({
     queryKey: ['basket', eventId],
@@ -22,7 +23,8 @@ export default function CheckoutPanel({ eventId, budget }) {
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [error, setError] = useState(null);
-  const [mandateId, setMandateId] = useState(null);
+  const [mandate, setMandate] = useState(null);
+  const [signedItems, setSignedItems] = useState([]);
   useEffect(() => setCap(budget ?? ''), [budget]);
   const capCents = Math.round(Number(cap || 0) * 100);
 
@@ -51,12 +53,13 @@ export default function CheckoutPanel({ eventId, budget }) {
 
   const approve = async () => {
     setBusy(true); setError(null); setReceipt(null);
-    const mandate = await createMandate(eventId, basket.items, capCents);
-    setMandateId(mandate.id);
-    await authorize(mandate.id);
+    const items = basket.items;
+    const m = await createMandate(eventId, items, capCents);
+    setMandate(m); setSignedItems(items);
+    await authorize(m.id);
   };
 
-  const retry = async () => { if (mandateId) await authorize(mandateId); };
+  const retry = async () => { if (mandate) await authorize(mandate.id); };
 
   if (!eventId) return <p className="text-sm text-muted-foreground">Save this room first.</p>;
   if (isLoading) return <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />;
@@ -67,12 +70,13 @@ export default function CheckoutPanel({ eventId, budget }) {
 
   return (
     <div className="space-y-6">
-      <BasketGroups items={basket.items} />
+      <BasketGroups items={basket.items} lines={lines} neededBy={neededBy}
+        signed={receipt ? Object.fromEntries(signedItems.map((i) => [i.line_id, i.unit_price_cents])) : null} />
       <div className="space-y-2">
         <Label>Spending cap ($)</Label>
         <Input type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />
-        <p className="text-xs text-muted-foreground">Valid for 15 minutes · Can be used once</p>
       </div>
+      <SignSummary items={basket.items} capCents={capCents} lines={lines} neededBy={neededBy} />
       <Button className={`w-full rounded-full ${!receipt && !busy && capCents ? 'ring-4 ring-primary/40 shadow-[0_0_24px_hsl(var(--primary))] animate-pulse' : ''}`} onClick={approve} disabled={busy || !capCents}>
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}Approve and sign
       </Button>
@@ -90,7 +94,7 @@ export default function CheckoutPanel({ eventId, budget }) {
           </Button>
         </div>
       )}
-      {receipt && <Receipt receipt={receipt} />}
+      {receipt && <Receipt receipt={receipt} mandate={mandate} items={signedItems} lines={lines} neededBy={neededBy} />}
       <TrustCheck basket={basket} eventId={eventId} capCents={capCents} />
     </div>
   );

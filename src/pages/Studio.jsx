@@ -295,7 +295,7 @@ export default function Studio() {
       {chosen.length > 0 && (
         <section className="grid lg:grid-cols-[1fr_2fr] gap-8 items-start">
           <SafetyChecks kit={chosen} ceiling={facts.ceiling_ft} />
-          <ShoppingList kit={chosen} eventId={eventId} budget={budget} open={checkoutOpen} onOpenChange={setCheckoutOpen} />
+          <ShoppingList kit={chosen} eventId={eventId} budget={budget} neededBy={facts.deadline} open={checkoutOpen} onOpenChange={setCheckoutOpen} />
         </section>
       )}
     </div>
