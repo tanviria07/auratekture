@@ -5,6 +5,10 @@ import { hasVisa, authorizeVisa } from '../../shared/visa.ts';
 
 const block = (reason) => Response.json({ error: 'MANDATE_TAMPER_BLOCKED', reason }, { status: 403 });
 
+// A store auth we won't retry: success, a hard decline, or a merchant-signature rejection.
+// PENDING / ERROR / HTTP_* are transient (network, timeout) and safe to retry with the same mandate.
+const TERMINAL = new Set(['AUTHORIZED', 'SIMULATED', 'DECLINED', 'MERCHANT_REJECTED']);
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -19,19 +23,38 @@ export default async function(req) {
     if (checked.reason) return block(checked.reason);
     const { hash, totals } = checked;
 
-    await base44.asServiceRole.entities.Mandate.update(m.id, { used: true });
     const keys = await getAgentKeys();
     const origin = req.headers.get('X-Base44-App-Url') || new URL(req.url).origin;
     const sandbox = hasVisa();
+    const ref = (store) => `${m.id}-${store}`; // stable Visa client reference → idempotent on retry
+
     const authorizations = await Promise.all(Object.entries(totals).map(async ([store, amount_cents]) => {
+      // Idempotency: a terminal auth for this mandate+store is reused as-is.
+      const { items: existing } = await base44.asServiceRole.entities.Authorization.filter({ mandate_id: m.id, store }, { sort: '-created_date', limit: 1 });
+      const prev = existing[0];
+      if (prev && TERMINAL.has(prev.status)) return prev;
+
+      // Reserve the row before any external call, so a crash/timeout leaves a traceable PENDING record.
+      let rec = prev || await base44.asServiceRole.entities.Authorization.create({ mandate_id: m.id, store, amount_cents, mode: sandbox ? 'sandbox' : 'simulated', status: 'PENDING', transaction_id: '', response_summary: '' });
+
       const v = await signedAgentFetch(origin, keys, { mandate_id: m.id, store, amount_cents });
-      let r;
-      if (v.status !== 200) r = { mode: sandbox ? 'sandbox' : 'simulated', status: 'MERCHANT_REJECTED', transaction_id: '', summary: JSON.stringify(v.body).slice(0, 300) };
-      else if (sandbox) r = await authorizeVisa(amount_cents, `${m.id}-${store}`);
-      else r = { mode: 'simulated', status: 'SIMULATED', transaction_id: 'sim_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16), summary: 'Simulated: Visa secrets not set' };
-      return base44.asServiceRole.entities.Authorization.create({ mandate_id: m.id, store, amount_cents, mode: r.mode, status: r.status, transaction_id: r.transaction_id || '', response_summary: r.summary });
+      let patch;
+      if (v.status !== 200) {
+        patch = { status: 'MERCHANT_REJECTED', response_summary: JSON.stringify(v.body).slice(0, 300) };
+      } else if (sandbox) {
+        const r = await authorizeVisa(amount_cents, ref(store)).catch((e) => ({ status: 'ERROR', summary: String(e?.message || e).slice(0, 300) }));
+        patch = { status: r.status || 'ERROR', transaction_id: r.transaction_id || '', response_summary: r.summary || JSON.stringify(r).slice(0, 300) };
+      } else {
+        patch = { status: 'SIMULATED', transaction_id: 'sim_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16), response_summary: 'Simulated: Visa secrets not set' };
+      }
+      rec = await base44.asServiceRole.entities.Authorization.update(rec.id, patch);
+      return rec;
     }));
+
     const allOk = authorizations.every((a) => a.status === 'AUTHORIZED' || a.status === 'SIMULATED');
+    // Burn the mandate only once every authorization is persisted, so a transient failure
+    // can be retried on the same mandate; per-store idempotency above prevents a double charge.
+    if (allOk) await base44.asServiceRole.entities.Mandate.update(m.id, { used: true });
     await base44.asServiceRole.entities.Basket.update(basket.id, { status: allOk ? 'authorized' : 'failed' });
     return Response.json({ authorizations, fingerprint: hash.slice(0, 12), keyid: keys.keyid, time: new Date().toISOString() });
   } catch (error) {
